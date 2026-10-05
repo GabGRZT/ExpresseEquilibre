@@ -1,313 +1,229 @@
 package com.example.expresseequilibre;
 
-import android.annotation.SuppressLint;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-import android.graphics.RectF;
-import android.view.View;
 import android.view.MotionEvent;
+import android.view.View;
 
+import androidx.core.graphics.Insets;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
+
+/**
+ * Chef d'orchestre : boucle update/draw, machine à états, routage tactile.
+ * Chaque écran est une classe à part (StartScreen, PlayScreen, ...).
+ */
 public class GameView extends View {
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
-    private float ballX;
-    private float ballY;
-    private static final float BALL_RADIUS = 35f;
-
-    private float ballSpeedX = 6f;
-    private float ballSpeedY = 4f;
-    @Override
-    protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
-        super.onSizeChanged(width, height, oldWidth, oldHeight);
-
-        // Initialisation seulement lors de la première apparition de la vue.
-        if (ballX == 0 && ballY == 0) {
-            ballX = width * 0.20f;
-            ballY = height * 0.50f;
-        }
+    public interface Host {
+        /** Demande la permission micro (si besoin) puis exécute "afterwards" quoi qu'il arrive. */
+        void requestMicPermission(Runnable afterwards);
     }
-    final Runnable gameLoop = new Runnable() {
+
+    public enum GameState { START, TUTORIAL, PLAYING, PAUSED, WIN, LOSE }
+
+    final SensorController sensors;
+    final Feedback feedback;
+    final PlayScreen playScreen;
+
+    private final Host host;
+    private final SharedPreferences prefs;
+    private final StartScreen startScreen;
+    private final TutorialScreen tutorialScreen;
+    private final PauseScreen pauseScreen;
+    private final EndScreen endScreen;
+
+    private GameState state = GameState.START;
+    private Screen current;
+
+    // Zones à éviter (encoche, barres système)
+    int insetTop, insetBottom, insetLeft, insetRight;
+
+    // Résultat de la dernière partie
+    boolean lastWin, lastRecord;
+    int lastStars, lastScore, lastSeconds, bestScore;
+
+    private float transition;
+    private long lastNanos;
+    private boolean running;
+
+    private final Runnable gameLoop = new Runnable() {
         @Override
         public void run() {
-            update();
-            invalidate(); // demande un nouveau dessin
-            postDelayed(this, 16); // environ 60 mises à jour/s
+            if (!running) return;
+            long now = System.nanoTime();
+            float dt = lastNanos == 0 ? 0.016f : Math.min(0.033f, (now - lastNanos) / 1_000_000_000f);
+            lastNanos = now;
+            update(dt);
+            invalidate();
+            postOnAnimation(this); // synchronisé sur l'affichage (~60 Hz), dt mesuré
         }
     };
-    public void startGame() {
-        post(gameLoop);
-    }
-    public void stopGame() {
-        removeCallbacks(gameLoop);
-    }
 
-    private boolean playerWon = false;
-
-
-    public GameView(Context context) {
+    public GameView(Context context, Host host) {
         super(context);
+        this.host = host;
+        Ui.init(context);
+        prefs = context.getSharedPreferences("equilibre_express", Context.MODE_PRIVATE);
+        sensors = new SensorController(context);
+        feedback = new Feedback(context, prefs);
+        bestScore = prefs.getInt("best", 0);
+
+        startScreen = new StartScreen(this);
+        tutorialScreen = new TutorialScreen(this);
+        playScreen = new PlayScreen(this);
+        pauseScreen = new PauseScreen(this);
+        endScreen = new EndScreen(this);
 
         setFocusable(true);
-    }
-    enum GameState {
-        START,
-        PLAYING,
-        PAUSED,
-        GAME_OVER
-    }
-
-    private GameState gameState = GameState.START;
-    private void update() {
-        // Rien ne bouge en dehors d'une partie en cours.
-        if (gameState != GameState.PLAYING) {
-            return;
-        }
-
-        int width = getWidth();
-        int height = getHeight();
-
-        // Tant que la vue n'est pas encore mesurée, sa taille peut être 0.
-        if (width <= 0 || height <= 0) {
-            return;
-        }
-
-        // Zone de jeu calculée à partir de la taille réelle de la vue.
-        float margin = width * 0.06f;
-        float top = height * 0.18f;
-        float bottom = height * 0.85f;
-
-        // Déplacement.
-        ballX += ballSpeedX;
-        ballY += ballSpeedY;
-
-        // Rebond horizontal.
-        if (ballX - BALL_RADIUS < margin) {
-            ballX = margin + BALL_RADIUS;
-            ballSpeedX = Math.abs(ballSpeedX);
-        }
-
-        if (ballX + BALL_RADIUS > width - margin) {
-            ballX = width - margin - BALL_RADIUS;
-            ballSpeedX = -Math.abs(ballSpeedX);
-        }
-
-        // Rebond vertical.
-        if (ballY - BALL_RADIUS < top) {
-            ballY = top + BALL_RADIUS;
-            ballSpeedY = Math.abs(ballSpeedY);
-        }
-
-        if (ballY + BALL_RADIUS > bottom) {
-            ballY = bottom - BALL_RADIUS;
-            ballSpeedY = -Math.abs(ballSpeedY);
-        }
+        ViewCompat.setOnApplyWindowInsetsListener(this, (v, insets) -> {
+            Insets i = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
+            insetTop = i.top;
+            insetBottom = i.bottom;
+            insetLeft = Math.max(i.left, i.right); // Uniformise les marges latérales
+            insetRight = insetLeft;
+            return insets;
+        });
+        setState(GameState.START);
     }
 
-    private void drawGameScreen(Canvas canvas) {
-        int width = getWidth();
-        int height = getHeight();
+    // ---------- Boucle de jeu ----------
 
-        // Fond de l'écran.
-        canvas.drawColor(Color.rgb(220, 240, 255));
-
-        // Dimensions du terrain, proportionnelles à l'écran.
-        float top = height * 0.18f;
-        float bottom = height * 0.85f;
-        float cornerRadius = width * 0.05f;
-
-        // Zone de jeu.
-        paint.setColor(Color.rgb(245, 0, 0));
-        RectF gameArea = new RectF(
-                (float) width,
-                top,
-                width - (float) width,
-                bottom
-        );
-        canvas.drawRoundRect(gameArea, cornerRadius, cornerRadius, paint);
-
-        // Texte de statut.
-        paint.setColor(Color.rgb(30, 70, 120));
-        paint.setTextSize(width * 0.06f);
-        paint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText(
-                "EN JEU",
-                width / 2f,
-                height * 0.10f,
-                paint
-        );
-
-        // Bille.
-        paint.setColor(Color.rgb(33, 150, 243));
-        canvas.drawCircle(ballX, ballY, BALL_RADIUS, paint);
-
-        // Reflet de la bille.
-        paint.setColor(Color.WHITE);
-        canvas.drawCircle(
-                ballX - BALL_RADIUS * 0.35f,
-                ballY - BALL_RADIUS * 0.35f,
-                BALL_RADIUS * 0.28f,
-                paint
-        );
-
-        // Consigne placée sous le terrain.
-        paint.setColor(Color.DKGRAY);
-        paint.setTextSize(width * 0.045f);
-        canvas.drawText(
-                "La bille rebondit dans la zone de jeu",
-                width / 2f,
-                height * 0.93f,
-                paint
-        );
+    public void startGame() {
+        if (running) return;
+        running = true;
+        lastNanos = 0;
+        sensors.start();
+        sensors.setMicActive(state == GameState.PLAYING);
+        postOnAnimation(gameLoop);
     }
 
-    private void drawStartScreen(Canvas canvas) {
-        int width = getWidth();
-        int height = getHeight();
-
-        canvas.drawColor(Color.rgb(220, 240, 255));
-
-        paint.setTextAlign(Paint.Align.CENTER);
-
-        paint.setColor(Color.rgb(30, 70, 120));
-        paint.setTextSize(width * 0.09f);
-        canvas.drawText(
-                "ÉQUILIBRE EXPRESS",
-                width / 2f,
-                height * 0.35f,
-                paint
-        );
-
-        paint.setColor(Color.DKGRAY);
-        paint.setTextSize(width * 0.055f);
-        canvas.drawText(
-                "Toucher pour jouer",
-                width / 2f,
-                height * 0.55f,
-                paint
-        );
+    public void stopGame() {
+        running = false;
+        removeCallbacks(gameLoop);
+        sensors.stop();
     }
 
-    private void drawPauseScreen(Canvas canvas) {
-        int width = getWidth();
-        int height = getHeight();
-
-        canvas.drawColor(Color.rgb(30, 70, 120));
-
-        paint.setColor(Color.WHITE);
-        paint.setTextAlign(Paint.Align.CENTER);
-        paint.setTextSize(width * 0.10f);
-        canvas.drawText(
-                "PAUSE",
-                width / 2f,
-                height * 0.45f,
-                paint
-        );
-
-        paint.setTextSize(width * 0.05f);
-        canvas.drawText(
-                "Toucher pour reprendre",
-                width / 2f,
-                height * 0.60f,
-                paint
-        );
+    public void pauseIfPlaying() {
+        if (state == GameState.PLAYING) pauseGame();
     }
 
-    private void drawGameOverScreen(Canvas canvas) {
-        int width = getWidth();
-        int height = getHeight();
-
-        canvas.drawColor(Color.rgb(198, 40, 40));
-
-        paint.setColor(Color.WHITE);
-        paint.setTextAlign(Paint.Align.CENTER);
-        paint.setTextSize(width * 0.10f);
-        canvas.drawText(
-                "GAME OVER",
-                width / 2f,
-                height * 0.45f,
-                paint
-        );
-
-        paint.setTextSize(width * 0.05f);
-        canvas.drawText(
-                "Toucher pour recommencer",
-                width / 2f,
-                height * 0.60f,
-                paint
-        );
+    private void update(float dt) {
+        current.update(dt);
+        if (transition > 0f) transition = Math.max(0f, transition - dt * 4f);
     }
-
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-
-        switch (gameState) {
-            case START:
-                drawStartScreen(canvas);
-                break;
-            case PLAYING:
-                drawGameScreen(canvas);
-                break;
-            case PAUSED:
-                drawPauseScreen(canvas);
-                break;
-            case GAME_OVER:
-                drawGameOverScreen(canvas);
-                break;
-        }
-
-        int width = getWidth();
-        int height = getHeight();
-
-        // Fond.
-        canvas.drawColor(Color.rgb(220, 240, 255));
-
-        // Zone de jeu
-        float margin = 40;
-        float top = 170;
-        float bottom = height - 170;
-
-        paint.setColor(Color.rgb(245, 245, 245));
-        @SuppressLint("DrawAllocation") RectF gameArea = new RectF(margin, top, width - margin, bottom);
-        canvas.drawRoundRect(gameArea, 30, 30, paint);
-
-        // Bille : sa position est maintenant fournie par ballX / ballY.
-        paint.setColor(Color.rgb(33, 150, 243));
-        canvas.drawCircle(ballX, ballY, 35, paint);
-        paint.setColor(Color.WHITE);
-        canvas.drawCircle(ballX - 12, ballY - 12, 10, paint);
-
+        current.draw(canvas, getWidth(), getHeight());
+        if (transition > 0f) Ui.dim(canvas, getWidth(), getHeight(), Ui.alpha(Ui.BG, (int) (transition * 255)));
     }
 
     @Override
-    public boolean onTouchEvent(MotionEvent event) {
-        if (event.getAction() != MotionEvent.ACTION_DOWN) {
-            return true;
-        }
+    protected void onDetachedFromWindow() {
+        stopGame();
+        feedback.release();
+        super.onDetachedFromWindow();
+    }
 
-        if (gameState == GameState.START) {
-            gameState = GameState.PLAYING;
-            invalidate();
-            return true;
-        }
+    // ---------- États et navigation ----------
 
-        if (gameState == GameState.PAUSED) {
-            gameState = GameState.PLAYING;
-            invalidate();
-            return true;
+    void setState(GameState s) {
+        state = s;
+        switch (s) {
+            case START: current = startScreen; break;
+            case TUTORIAL: current = tutorialScreen; break;
+            case PLAYING: current = playScreen; break;
+            case PAUSED: current = pauseScreen; break;
+            default: current = endScreen; break;
         }
+        sensors.setMicActive(s == GameState.PLAYING); // le micro n'écoute que pendant la partie
+        transition = (s == GameState.PAUSED) ? 0f : 1f;
+        current.onEnter();
+    }
 
-        if (gameState == GameState.GAME_OVER) {
-            ballX = getWidth() * 0.20f;
-            ballY = getHeight() * 0.50f;
-            gameState = GameState.PLAYING;
-            invalidate();
-            return true;
+    void goStart() { setState(GameState.START); }
+
+    void goTutorial() { setState(GameState.TUTORIAL); }
+
+    void onPlayPressed() {
+        if (prefs.getBoolean("tutorialSeen", false)) startWithMic();
+        else goTutorial();
+    }
+
+    void onTutorialDone() {
+        prefs.edit().putBoolean("tutorialSeen", true).apply();
+        startWithMic();
+    }
+
+    private void startWithMic() { host.requestMicPermission(this::beginPlay); }
+
+    void beginPlay() {
+        playScreen.reset();
+        setState(GameState.PLAYING);
+    }
+
+    void pauseGame() { setState(GameState.PAUSED); }
+
+    void resumeGame() {
+        playScreen.beginCountdown(true);
+        setState(GameState.PLAYING);
+    }
+
+    void finishGame(boolean win, int stars, int score, int secondsLeft) {
+        lastWin = win;
+        lastStars = stars;
+        lastScore = score;
+        lastSeconds = secondsLeft;
+        lastRecord = score > bestScore;
+        if (lastRecord) {
+            bestScore = score;
+            prefs.edit().putInt("best", score).apply();
         }
+        setState(win ? GameState.WIN : GameState.LOSE);
+    }
 
+    /** Bouton retour : @return true si l'événement est consommé. */
+    boolean handleBack() {
+        switch (state) {
+            case PLAYING: pauseGame(); return true;
+            case PAUSED: resumeGame(); return true;
+            case TUTORIAL:
+            case WIN:
+            case LOSE: goStart(); return true;
+            default: return false;
+        }
+    }
+
+    // ---------- Tactile ----------
+
+    @Override
+    public boolean onTouchEvent(MotionEvent e) {
+        int idx = e.getActionIndex();
+        switch (e.getActionMasked()) {
+            case MotionEvent.ACTION_DOWN:
+            case MotionEvent.ACTION_POINTER_DOWN:
+                current.onDown(e.getX(idx), e.getY(idx));
+                break;
+            case MotionEvent.ACTION_MOVE:
+                current.onMove(e.getX(), e.getY());
+                break;
+            case MotionEvent.ACTION_UP:
+            case MotionEvent.ACTION_POINTER_UP:
+                current.onUp(e.getX(idx), e.getY(idx));
+                if (e.getActionMasked() == MotionEvent.ACTION_UP) performClick();
+                break;
+            case MotionEvent.ACTION_CANCEL:
+                current.onCancel();
+                break;
+        }
         return true;
+    }
+
+    @Override
+    public boolean performClick() {
+        return super.performClick();
     }
 }
