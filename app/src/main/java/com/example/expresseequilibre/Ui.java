@@ -13,7 +13,6 @@ import android.util.TypedValue;
 final class Ui {
     private Ui() {}
 
-    // Palette (contrastes vérifiés : texte blanc sur BUTTON/TEAL/SLATE/MUTED >= 4.5:1)
     static final int BG = Color.rgb(220, 240, 255);
     static final int PRIMARY = Color.rgb(30, 70, 120);
     static final int BUTTON = Color.rgb(21, 101, 192);
@@ -25,16 +24,18 @@ final class Ui {
     static final int STAR_EMPTY = Color.rgb(176, 190, 205);
     static final int OK = Color.rgb(46, 125, 50);
     static final int DANGER = Color.rgb(198, 40, 40);
+    static final int PURPLE = Color.rgb(123, 31, 162);
+    static final int ORANGE = Color.rgb(191, 87, 0);
     static final int BOARD = Color.rgb(250, 252, 255);
     static final int WALL = Color.rgb(69, 90, 120);
     static final int HOLE = Color.rgb(28, 33, 48);
     static final int TEXT = Color.rgb(25, 40, 60);
     static final int GOLD_TEXT = Color.rgb(150, 85, 0);
 
-    // Objets réutilisés pour ne rien allouer dans onDraw().
     static final Paint P = new Paint(Paint.ANTI_ALIAS_FLAG);
     static final RectF R = new RectF();
     static final Path PATH = new Path();
+    private static final Typeface TITLE = Typeface.create("sans-serif-black", Typeface.NORMAL);
 
     private static float density = 1f;
     private static float spScale = 1f;
@@ -78,11 +79,24 @@ final class Ui {
         return P.measureText(s);
     }
 
-    /** Dessine du texte ; si maxW > 0, réduit la taille pour que le texte tienne. */
     static void text(Canvas c, String s, float x, float y, float size, int color,
                      boolean bold, Paint.Align align, float maxW) {
+        draw(c, s, x, y, size, color, bold ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT, align, maxW);
+    }
+
+    static void text(Canvas c, String s, float cx, float y, float size, int color, boolean bold) {
+        text(c, s, cx, y, size, color, bold, Paint.Align.CENTER, 0f);
+    }
+
+    /** Titres : police "black" plus punchy. */
+    static void title(Canvas c, String s, float x, float y, float size, int color, Paint.Align align, float maxW) {
+        draw(c, s, x, y, size, color, TITLE, align, maxW);
+    }
+
+    private static void draw(Canvas c, String s, float x, float y, float size, int color,
+                             Typeface tf, Paint.Align align, float maxW) {
         P.setStyle(Paint.Style.FILL);
-        P.setTypeface(bold ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+        P.setTypeface(tf);
         P.setTextAlign(align);
         P.setTextSize(size);
         if (maxW > 0f) {
@@ -91,10 +105,6 @@ final class Ui {
         }
         P.setColor(color);
         c.drawText(s, x, y, P);
-    }
-
-    static void text(Canvas c, String s, float cx, float y, float size, int color, boolean bold) {
-        text(c, s, cx, y, size, color, bold, Paint.Align.CENTER, 0f);
     }
 
     static void roundRect(Canvas c, float l, float t, float r, float b, float rad, int color) {

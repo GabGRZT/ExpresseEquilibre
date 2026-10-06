@@ -10,26 +10,25 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-/**
- * Chef d'orchestre : boucle update/draw, machine à états, routage tactile.
- * Chaque écran est une classe à part (StartScreen, PlayScreen, ...).
- */
+/** Chef d'orchestre : boucle update/draw, machine à états, routage tactile. */
 public class GameView extends View {
 
     public interface Host {
-        /** Demande la permission micro (si besoin) puis exécute "afterwards" quoi qu'il arrive. */
         void requestMicPermission(Runnable afterwards);
     }
 
-    public enum GameState { START, TUTORIAL, PLAYING, PAUSED, WIN, LOSE }
+    public enum GameState { START, MODES, LEVELS, TUTORIAL, PLAYING, PAUSED, WIN, LOSE }
 
     final SensorController sensors;
     final Feedback feedback;
+    final Progress progress;
     final PlayScreen playScreen;
 
     private final Host host;
     private final SharedPreferences prefs;
     private final StartScreen startScreen;
+    private final ModeScreen modeScreen;
+    private final LevelScreen levelScreen;
     private final TutorialScreen tutorialScreen;
     private final PauseScreen pauseScreen;
     private final EndScreen endScreen;
@@ -37,12 +36,17 @@ public class GameView extends View {
     private GameState state = GameState.START;
     private Screen current;
 
-    // Zones à éviter (encoche, barres système)
     int insetTop, insetBottom, insetLeft, insetRight;
 
+    // Mode et niveau courants
+    boolean ghostMode;
+    int curLevel;
+    int pendingLevel = -1;
+
     // Résultat de la dernière partie
-    boolean lastWin, lastRecord;
+    boolean lastWin, lastRecord, lastNewGhost;
     int lastStars, lastScore, lastSeconds, bestScore;
+    float lastRunTime, lastGhostDelta = Float.NaN;
 
     private float transition;
     private long lastNanos;
@@ -57,7 +61,7 @@ public class GameView extends View {
             lastNanos = now;
             update(dt);
             invalidate();
-            postOnAnimation(this); // synchronisé sur l'affichage (~60 Hz), dt mesuré
+            postOnAnimation(this);
         }
     };
 
@@ -66,11 +70,14 @@ public class GameView extends View {
         this.host = host;
         Ui.init(context);
         prefs = context.getSharedPreferences("equilibre_express", Context.MODE_PRIVATE);
+        progress = new Progress(prefs);
         sensors = new SensorController(context);
         feedback = new Feedback(context, prefs);
         bestScore = prefs.getInt("best", 0);
 
         startScreen = new StartScreen(this);
+        modeScreen = new ModeScreen(this);
+        levelScreen = new LevelScreen(this);
         tutorialScreen = new TutorialScreen(this);
         playScreen = new PlayScreen(this);
         pauseScreen = new PauseScreen(this);
@@ -81,7 +88,7 @@ public class GameView extends View {
             Insets i = insets.getInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout());
             insetTop = i.top;
             insetBottom = i.bottom;
-            insetLeft = Math.max(i.left, i.right); // Uniformise les marges latérales
+            insetLeft = Math.max(i.left, i.right);
             insetRight = insetLeft;
             return insets;
         });
@@ -117,8 +124,15 @@ public class GameView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
+        canvas.save();
+        if (transition > 0f) canvas.translate(transition * transition * getWidth() * 0.06f, 0f); // petit glissement
         current.draw(canvas, getWidth(), getHeight());
-        if (transition > 0f) Ui.dim(canvas, getWidth(), getHeight(), Ui.alpha(Ui.BG, (int) (transition * 255)));
+        canvas.restore();
+        if (transition > 0f) {
+            // Fondu de la couleur du monde en jeu (jamais d'éclair clair sur un monde sombre).
+            int tc = state == GameState.PLAYING ? World.of(playScreen.worldIndex()).bg : Ui.BG;
+            Ui.dim(canvas, getWidth(), getHeight(), Ui.alpha(tc, (int) (transition * 255)));
+        }
     }
 
     @Override
@@ -134,33 +148,57 @@ public class GameView extends View {
         state = s;
         switch (s) {
             case START: current = startScreen; break;
+            case MODES: current = modeScreen; break;
+            case LEVELS: current = levelScreen; break;
             case TUTORIAL: current = tutorialScreen; break;
             case PLAYING: current = playScreen; break;
             case PAUSED: current = pauseScreen; break;
             default: current = endScreen; break;
         }
-        sensors.setMicActive(s == GameState.PLAYING); // le micro n'écoute que pendant la partie
+        sensors.setMicActive(s == GameState.PLAYING);
         transition = (s == GameState.PAUSED) ? 0f : 1f;
         current.onEnter();
     }
 
     void goStart() { setState(GameState.START); }
 
+    void goModes() { setState(GameState.MODES); }
+
+    void goLevels(boolean ghost) {
+        ghostMode = ghost;
+        setState(GameState.LEVELS);
+    }
+
     void goTutorial() { setState(GameState.TUTORIAL); }
 
-    void onPlayPressed() {
-        if (prefs.getBoolean("tutorialSeen", false)) startWithMic();
-        else goTutorial();
+    /** "Jouer" sur l'accueil : choix du mode. */
+    void onPlayPressed() { goModes(); }
+
+    void startLevel(int lv) {
+        curLevel = lv;
+        if (!prefs.getBoolean("tutorialSeen", false)) {
+            pendingLevel = lv;
+            goTutorial();
+        } else {
+            launch();
+        }
     }
 
     void onTutorialDone() {
         prefs.edit().putBoolean("tutorialSeen", true).apply();
-        startWithMic();
+        if (pendingLevel >= 0) {
+            curLevel = pendingLevel;
+            pendingLevel = -1;
+            launch();
+        } else {
+            goStart();
+        }
     }
 
-    private void startWithMic() { host.requestMicPermission(this::beginPlay); }
+    private void launch() { host.requestMicPermission(this::beginPlay); }
 
     void beginPlay() {
+        playScreen.load(Levels.ALL[curLevel], curLevel, ghostMode);
         playScreen.reset();
         setState(GameState.PLAYING);
     }
@@ -172,27 +210,36 @@ public class GameView extends View {
         setState(GameState.PLAYING);
     }
 
-    void finishGame(boolean win, int stars, int score, int secondsLeft) {
+    void finishGame(boolean win, int stars, int score, int secondsLeft,
+                    float runTime, float ghostDelta, boolean newGhost) {
         lastWin = win;
         lastStars = stars;
         lastScore = score;
         lastSeconds = secondsLeft;
+        lastRunTime = runTime;
+        lastGhostDelta = ghostDelta;
+        lastNewGhost = newGhost;
         lastRecord = score > bestScore;
         if (lastRecord) {
             bestScore = score;
             prefs.edit().putInt("best", score).apply();
         }
+        if (win) progress.record(curLevel, stars);
         setState(win ? GameState.WIN : GameState.LOSE);
     }
 
-    /** Bouton retour : @return true si l'événement est consommé. */
     boolean handleBack() {
         switch (state) {
             case PLAYING: pauseGame(); return true;
             case PAUSED: resumeGame(); return true;
             case TUTORIAL:
+                if (pendingLevel >= 0) { pendingLevel = -1; goLevels(ghostMode); }
+                else goStart();
+                return true;
+            case LEVELS: goModes(); return true;
+            case MODES: goStart(); return true;
             case WIN:
-            case LOSE: goStart(); return true;
+            case LOSE: goLevels(ghostMode); return true;
             default: return false;
         }
     }

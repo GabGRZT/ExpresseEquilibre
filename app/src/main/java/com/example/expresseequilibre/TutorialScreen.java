@@ -7,8 +7,8 @@ import android.graphics.Paint;
 final class TutorialScreen extends Screen {
     private static final String[] TITLES = {"Incliner", "Secouer", "Souffler"};
     private static final String[][] SUBS = {
-            {"Fais rouler la bille", "en penchant le téléphone"},
-            {"Une secousse = un saut", "au-dessus d'un trou"},
+            {"Fais rouler la bille", "en penchant l'appareil"},
+            {"Une secousse = un saut,", "ou casse un mur fragile"},
             {"Souffle dans le micro :", "le vent te pousse"}};
 
     private final UiButton go = new UiButton("C'est parti !", Ui.BUTTON, Icons::play);
@@ -19,7 +19,11 @@ final class TutorialScreen extends Screen {
         go.horizontal = true;
     }
 
-    @Override void onEnter() { t = 0f; }
+    @Override
+    void onEnter() {
+        t = 0f;
+        go.label = g.pendingLevel >= 0 ? "C'est parti !" : "Compris";
+    }
 
     @Override void update(float dt) { t += dt; }
 
@@ -29,9 +33,9 @@ final class TutorialScreen extends Screen {
         float L = g.insetLeft, W = w - g.insetLeft - g.insetRight;
         float cxm = L + W / 2f;
 
-        Ui.text(c, "Comment jouer ?", cxm, h * 0.12f, h * 0.10f, Ui.PRIMARY, true, Paint.Align.CENTER, W * 0.9f);
-        Ui.text(c, "Récupère les 3 étoiles et atteins la sortie en 60 s",
-                cxm, h * 0.19f, Math.max(Ui.sp(15), h * 0.045f), Ui.TEXT, false, Paint.Align.CENTER, W * 0.9f);
+        Ui.title(c, "Comment jouer ?", cxm, h * 0.12f, h * 0.10f, Ui.PRIMARY, Paint.Align.CENTER, W * 0.9f);
+        Ui.text(c, "Récupère les étoiles, évite les trous, atteins la sortie avant la fin du temps",
+                cxm, h * 0.19f, Math.max(Ui.sp(15), h * 0.042f), Ui.TEXT, false, Paint.Align.CENTER, W * 0.92f);
 
         float gap = W * 0.02f, x0 = L + W * 0.05f;
         float cw = (W * 0.90f - 2 * gap) / 3f, ch = h * 0.46f, y = h * 0.24f;
@@ -47,13 +51,13 @@ final class TutorialScreen extends Screen {
             else if (i == 1) Icons.shakeAnim(c, cx, icy, s, Color.WHITE, (float) Math.sin(t * 14f) * s * 0.06f);
             else Icons.wind(c, cx, icy, s, Color.WHITE);
 
-            Ui.text(c, TITLES[i], cx, y + ch * 0.62f, ch * 0.11f, Ui.PRIMARY, true, Paint.Align.CENTER, cw * 0.9f);
+            Ui.title(c, TITLES[i], cx, y + ch * 0.62f, ch * 0.11f, Ui.PRIMARY, Paint.Align.CENTER, cw * 0.9f);
             Ui.text(c, SUBS[i][0], cx, y + ch * 0.78f, ch * 0.08f, Ui.TEXT, false, Paint.Align.CENTER, cw * 0.9f);
             Ui.text(c, SUBS[i][1], cx, y + ch * 0.91f, ch * 0.08f, Ui.TEXT, false, Paint.Align.CENTER, cw * 0.9f);
         }
 
-        Ui.text(c, "Les boutons Saut et Souffle, sur les côtés, sont là en secours si un geste n'est pas reconnu.",
-                cxm, h * 0.78f, Math.max(Ui.sp(14), h * 0.04f), Ui.TEXT, false, Paint.Align.CENTER, W * 0.9f);
+        Ui.text(c, "Les boutons Saut/Casser et Souffle, sur les côtés, servent de secours si un geste n'est pas reconnu.",
+                cxm, h * 0.78f, Math.max(Ui.sp(14), h * 0.038f), Ui.TEXT, false, Paint.Align.CENTER, W * 0.92f);
 
         go.set(L + W * 0.30f, h * 0.84f, L + W * 0.70f, h * 0.96f);
         go.draw(c);
