@@ -2,11 +2,10 @@ package com.example.expresseequilibre;
 
 import android.content.SharedPreferences;
 
-/** Sauvegarde : étoiles, niveaux terminés, fantômes (meilleur passage) et réglage "effets réduits". */
+/** Sauvegarde : étoiles, médailles, déblocages, fantômes, skin, musique et réglage "effets réduits". */
 final class Progress {
     static final float STEP = 0.05f; // intervalle d'enregistrement du fantôme (s)
 
-    /** Parcours enregistré, en coordonnées logiques. */
     static final class Ghost {
         final float time;
         final short[] x, y;
@@ -38,19 +37,47 @@ final class Progress {
         reducedFx = p.getBoolean("reducedFx", false);
     }
 
-    void toggleReducedFx() {
-        reducedFx = !reducedFx;
-        p.edit().putBoolean("reducedFx", reducedFx).apply();
+    // ---------- Réglages ----------
+
+    void toggleReducedFx() { setReducedFx(!reducedFx); }
+
+    void setReducedFx(boolean v) {
+        reducedFx = v;
+        p.edit().putBoolean("reducedFx", v).apply();
     }
+
+    /** 0 = aucune musique, 1 = menus, 2 = menus + jeu (volume bas). */
+    int musicMode() { return p.getInt("musicMode", 1); }
+
+    int cycleMusicMode() {
+        int m = (musicMode() + 1) % 3;
+        p.edit().putInt("musicMode", m).apply();
+        return m;
+    }
+
+    // ---------- Niveaux ----------
 
     int stars(int lv) { return p.getInt("stars_" + lv, 0); }
 
+    int medal(int lv) { return p.getInt("medal_" + lv, 0); }
+
     boolean done(int lv) { return p.getBoolean("done_" + lv, false); }
 
-    boolean unlocked(int lv) { return lv == 0 || done(lv - 1); }
+    /** @return null si le niveau est jouable, sinon la raison du verrouillage. */
+    String lockReason(int lv) {
+        Level l = Levels.ALL[lv];
+        int req = l.req == -2 ? lv - 1 : l.req;
+        if (req >= 0 && !done(req)) return "Termine d'abord « " + Levels.ALL[req].name + " ».";
+        if (totalStars() < l.starGate) return "Il te faut " + l.starGate + " étoiles (tu en as " + totalStars() + ").";
+        return null;
+    }
 
-    void record(int lv, int stars) {
-        p.edit().putBoolean("done_" + lv, true).putInt("stars_" + lv, Math.max(stars(lv), stars)).apply();
+    boolean unlocked(int lv) { return lockReason(lv) == null; }
+
+    void record(int lv, int stars, int medal) {
+        p.edit().putBoolean("done_" + lv, true)
+                .putInt("stars_" + lv, Math.max(stars(lv), stars))
+                .putInt("medal_" + lv, Math.max(medal(lv), medal)).apply();
     }
 
     int totalStars() {
@@ -64,6 +91,17 @@ final class Progress {
         for (int i = 0; i < Levels.ALL.length; i++) if (done(i)) t++;
         return t;
     }
+
+    // ---------- Skins ----------
+
+    boolean skinUnlocked(int i) { return totalStars() >= Skin.values()[i].unlock; }
+
+    int skin() {
+        int s = p.getInt("skin", 0);
+        return (s >= 0 && s < Skin.values().length && skinUnlocked(s)) ? s : 0;
+    }
+
+    void setSkin(int s) { p.edit().putInt("skin", s).apply(); }
 
     // ---------- Fantômes ----------
 
@@ -98,7 +136,6 @@ final class Progress {
         }
     }
 
-    /** @return true si ce passage devient le nouveau fantôme (premier passage ou record). */
     boolean saveGhostIfBetter(int lv, float time, short[] xs, short[] ys, int n) {
         if (n <= 0) return false;
         if (hasGhost(lv) && time >= ghostTime(lv)) return false;

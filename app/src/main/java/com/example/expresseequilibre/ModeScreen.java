@@ -6,9 +6,13 @@ import android.graphics.Paint;
 
 /** Choix du mode : Versus (course contre le fantôme) à gauche, Campagne à droite. */
 final class ModeScreen extends Screen {
+    private static final String[] MUSIC = {"NON", "MENUS", "MENUS + JEU"};
+
     private final UiButton ghostCard = new UiButton("", Ui.PURPLE, null);
     private final UiButton campaignCard = new UiButton("", Ui.BUTTON, null);
     private final UiButton back = new UiButton("Retour", Ui.SLATE, null);
+    private final UiButton skins = new UiButton("Skins", Ui.TEAL, null);
+    private final UiButton music = new UiButton("", Ui.SLATE, null);
 
     ModeScreen(GameView g) { super(g); }
 
@@ -16,20 +20,26 @@ final class ModeScreen extends Screen {
     void draw(Canvas c, int w, int h) {
         c.drawColor(Ui.BG);
         float L = g.insetLeft, W = w - g.insetLeft - g.insetRight;
-        Ui.title(c, "Choisis ton mode", L + W / 2f, h * 0.15f, h * 0.09f, Ui.PRIMARY, Paint.Align.CENTER, W * 0.9f);
+        Ui.title(c, "Choisis ton mode", L + W / 2f, h * 0.14f, h * 0.09f, Ui.PRIMARY, Paint.Align.CENTER, W * 0.9f);
 
-        ghostCard.set(L + W * 0.05f, h * 0.22f, L + W * 0.48f, h * 0.80f);
-        campaignCard.set(L + W * 0.52f, h * 0.22f, L + W * 0.95f, h * 0.80f);
-        back.set(L + W * 0.05f, h * 0.86f, L + W * 0.28f, h * 0.95f);
+        ghostCard.set(L + W * 0.05f, h * 0.20f, L + W * 0.48f, h * 0.78f);
+        campaignCard.set(L + W * 0.52f, h * 0.20f, L + W * 0.95f, h * 0.78f);
+        back.set(L + W * 0.05f, h * 0.85f, L + W * 0.24f, h * 0.95f);
+        skins.set(L + W * 0.29f, h * 0.85f, L + W * 0.52f, h * 0.95f);
+        music.set(L + W * 0.57f, h * 0.85f, L + W * 0.95f, h * 0.95f);
+        skins.label = "Skins : " + Skin.values()[g.progress.skin()].label;
+        music.label = "Musique : " + MUSIC[g.progress.musicMode()];
 
         drawCard(c, ghostCard, Ui.PURPLE, Icons::ghost, "Versus", "Course contre le fantôme",
                 "Affronte ton meilleur passage,", "seconde après seconde.",
                 g.progress.ghostCount() + " fantôme(s) enregistré(s)");
-        drawCard(c, campaignCard, Ui.BUTTON, Icons::flag, "Campagne", "6 niveaux, 3 mondes",
-                "Étoiles, murs fragiles, bonus", "et un niveau stroboscopique.",
+        drawCard(c, campaignCard, Ui.BUTTON, Icons::flag, "Campagne", Levels.ALL.length + " niveaux, 4 mondes",
+                "Étoiles, murs fragiles, bonus,", "stroboscope et volcan.",
                 g.progress.doneCount() + "/" + Levels.ALL.length + " niveaux · "
                         + g.progress.totalStars() + "/" + (3 * Levels.ALL.length) + " étoiles");
         back.draw(c);
+        skins.draw(c);
+        music.draw(c);
     }
 
     private void drawCard(Canvas c, UiButton b, int color, UiButton.Icon icon, String title, String sub,
@@ -54,16 +64,27 @@ final class ModeScreen extends Screen {
         Ui.text(c, foot, cx, bo - h * 0.05f, fs * 0.95f, Ui.PRIMARY, true, Paint.Align.CENTER, w * 0.9f);
     }
 
-    @Override void onDown(float x, float y) { ghostCard.onDown(x, y); campaignCard.onDown(x, y); back.onDown(x, y); }
+    @Override
+    void onDown(float x, float y) {
+        ghostCard.onDown(x, y); campaignCard.onDown(x, y); back.onDown(x, y); skins.onDown(x, y); music.onDown(x, y);
+    }
 
-    @Override void onMove(float x, float y) { ghostCard.onMove(x, y); campaignCard.onMove(x, y); back.onMove(x, y); }
+    @Override
+    void onMove(float x, float y) {
+        ghostCard.onMove(x, y); campaignCard.onMove(x, y); back.onMove(x, y); skins.onMove(x, y); music.onMove(x, y);
+    }
 
     @Override
     void onUp(float x, float y) {
         if (ghostCard.onUp(x, y)) g.goLevels(true);
         else if (campaignCard.onUp(x, y)) g.goLevels(false);
         else if (back.onUp(x, y)) g.goStart();
+        else if (skins.onUp(x, y)) g.goSkins();
+        else if (music.onUp(x, y)) g.cycleMusicMode();
     }
 
-    @Override void onCancel() { ghostCard.onCancel(); campaignCard.onCancel(); back.onCancel(); }
+    @Override
+    void onCancel() {
+        ghostCard.onCancel(); campaignCard.onCancel(); back.onCancel(); skins.onCancel(); music.onCancel();
+    }
 }

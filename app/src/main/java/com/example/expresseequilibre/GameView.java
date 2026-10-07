@@ -10,14 +10,14 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-/** Chef d'orchestre : boucle update/draw, machine à états, routage tactile. */
+/** Chef d'orchestre : boucle update/draw, machine à états, musique, routage tactile. */
 public class GameView extends View {
 
     public interface Host {
         void requestMicPermission(Runnable afterwards);
     }
 
-    public enum GameState { START, MODES, LEVELS, TUTORIAL, PLAYING, PAUSED, WIN, LOSE }
+    public enum GameState { START, MODES, LEVELS, SKINS, WARNING, TUTORIAL, PLAYING, PAUSED, WIN, LOSE }
 
     final SensorController sensors;
     final Feedback feedback;
@@ -29,6 +29,8 @@ public class GameView extends View {
     private final StartScreen startScreen;
     private final ModeScreen modeScreen;
     private final LevelScreen levelScreen;
+    private final SkinScreen skinScreen;
+    private final WarnScreen warnScreen;
     private final TutorialScreen tutorialScreen;
     private final PauseScreen pauseScreen;
     private final EndScreen endScreen;
@@ -38,14 +40,13 @@ public class GameView extends View {
 
     int insetTop, insetBottom, insetLeft, insetRight;
 
-    // Mode et niveau courants
     boolean ghostMode;
     int curLevel;
     int pendingLevel = -1;
 
     // Résultat de la dernière partie
     boolean lastWin, lastRecord, lastNewGhost;
-    int lastStars, lastScore, lastSeconds, bestScore;
+    int lastStars, lastScore, lastSeconds, bestScore, lastMedal, lastUnlockedSkin = -1;
     float lastRunTime, lastGhostDelta = Float.NaN;
 
     private float transition;
@@ -78,6 +79,8 @@ public class GameView extends View {
         startScreen = new StartScreen(this);
         modeScreen = new ModeScreen(this);
         levelScreen = new LevelScreen(this);
+        skinScreen = new SkinScreen(this);
+        warnScreen = new WarnScreen(this);
         tutorialScreen = new TutorialScreen(this);
         playScreen = new PlayScreen(this);
         pauseScreen = new PauseScreen(this);
@@ -103,6 +106,7 @@ public class GameView extends View {
         lastNanos = 0;
         sensors.start();
         sensors.setMicActive(state == GameState.PLAYING);
+        feedback.sound().onAppResume();
         postOnAnimation(gameLoop);
     }
 
@@ -110,6 +114,7 @@ public class GameView extends View {
         running = false;
         removeCallbacks(gameLoop);
         sensors.stop();
+        feedback.sound().onAppPause();
     }
 
     public void pauseIfPlaying() {
@@ -125,11 +130,10 @@ public class GameView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         canvas.save();
-        if (transition > 0f) canvas.translate(transition * transition * getWidth() * 0.06f, 0f); // petit glissement
+        if (transition > 0f) canvas.translate(transition * transition * getWidth() * 0.06f, 0f);
         current.draw(canvas, getWidth(), getHeight());
         canvas.restore();
         if (transition > 0f) {
-            // Fondu de la couleur du monde en jeu (jamais d'éclair clair sur un monde sombre).
             int tc = state == GameState.PLAYING ? World.of(playScreen.worldIndex()).bg : Ui.BG;
             Ui.dim(canvas, getWidth(), getHeight(), Ui.alpha(tc, (int) (transition * 255)));
         }
@@ -150,6 +154,8 @@ public class GameView extends View {
             case START: current = startScreen; break;
             case MODES: current = modeScreen; break;
             case LEVELS: current = levelScreen; break;
+            case SKINS: current = skinScreen; break;
+            case WARNING: current = warnScreen; break;
             case TUTORIAL: current = tutorialScreen; break;
             case PLAYING: current = playScreen; break;
             case PAUSED: current = pauseScreen; break;
@@ -157,12 +163,40 @@ public class GameView extends View {
         }
         sensors.setMicActive(s == GameState.PLAYING);
         transition = (s == GameState.PAUSED) ? 0f : 1f;
+        updateMusic();
         current.onEnter();
+    }
+
+    /** Musique : menus = thème principal ; en jeu = thème du monde, volume bas, seulement si activé. */
+    private void updateMusic() {
+        int mode = progress.musicMode();
+        int theme = -1;
+        float vol = 0.5f;
+        switch (state) {
+            case PLAYING:
+                if (mode == 2) { theme = Math.max(0, Math.min(3, playScreen.worldIndex())); vol = 0.16f; }
+                break;
+            case PAUSED:
+            case WIN:
+            case LOSE:
+                break;
+            default:
+                if (mode >= 1) theme = 0;
+                break;
+        }
+        feedback.sound().setMusic(theme, vol);
+    }
+
+    void cycleMusicMode() {
+        progress.cycleMusicMode();
+        updateMusic();
     }
 
     void goStart() { setState(GameState.START); }
 
     void goModes() { setState(GameState.MODES); }
+
+    void goSkins() { setState(GameState.SKINS); }
 
     void goLevels(boolean ghost) {
         ghostMode = ghost;
@@ -171,13 +205,18 @@ public class GameView extends View {
 
     void goTutorial() { setState(GameState.TUTORIAL); }
 
-    /** "Jouer" sur l'accueil : choix du mode. */
     void onPlayPressed() { goModes(); }
 
+    /** Lancement d'un niveau : avertissement stroboscope -> tutoriel (1re fois) -> micro -> jeu. */
     void startLevel(int lv) {
         curLevel = lv;
+        if (Levels.ALL[lv].strobeHz > 0f && !progress.reducedFx) setState(GameState.WARNING);
+        else proceedAfterWarning();
+    }
+
+    void proceedAfterWarning() {
         if (!prefs.getBoolean("tutorialSeen", false)) {
-            pendingLevel = lv;
+            pendingLevel = curLevel;
             goTutorial();
         } else {
             launch();
@@ -211,7 +250,7 @@ public class GameView extends View {
     }
 
     void finishGame(boolean win, int stars, int score, int secondsLeft,
-                    float runTime, float ghostDelta, boolean newGhost) {
+                    float runTime, float ghostDelta, boolean newGhost, int medal) {
         lastWin = win;
         lastStars = stars;
         lastScore = score;
@@ -219,12 +258,20 @@ public class GameView extends View {
         lastRunTime = runTime;
         lastGhostDelta = ghostDelta;
         lastNewGhost = newGhost;
+        lastMedal = medal;
         lastRecord = score > bestScore;
         if (lastRecord) {
             bestScore = score;
             prefs.edit().putInt("best", score).apply();
         }
-        if (win) progress.record(curLevel, stars);
+        int before = progress.totalStars();
+        if (win) progress.record(curLevel, stars, medal);
+        int after = progress.totalStars();
+        lastUnlockedSkin = -1;
+        Skin[] sk = Skin.values();
+        for (int i = sk.length - 1; i >= 0; i--) {
+            if (sk[i].unlock > before && sk[i].unlock <= after) { lastUnlockedSkin = i; break; }
+        }
         setState(win ? GameState.WIN : GameState.LOSE);
     }
 
@@ -236,6 +283,8 @@ public class GameView extends View {
                 if (pendingLevel >= 0) { pendingLevel = -1; goLevels(ghostMode); }
                 else goStart();
                 return true;
+            case WARNING: goLevels(ghostMode); return true;
+            case SKINS: goModes(); return true;
             case LEVELS: goModes(); return true;
             case MODES: goStart(); return true;
             case WIN:

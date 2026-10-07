@@ -1,6 +1,7 @@
 package com.example.expresseequilibre;
 
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 
@@ -225,5 +226,24 @@ final class Icons {
         p.lineTo(cx + s * 0.02f, cy - s * 0.08f);
         p.close();
         c.drawPath(p, Ui.fill(color));
+    }
+
+    static void medal(Canvas c, float cx, float cy, float s, int color) {
+        Path p = Ui.PATH;
+        p.reset();
+        p.moveTo(cx - s * 0.28f, cy - s * 0.45f);
+        p.lineTo(cx - s * 0.05f, cy - s * 0.05f);
+        p.lineTo(cx - s * 0.38f, cy - s * 0.05f);
+        p.close();
+        c.drawPath(p, Ui.fill(Ui.shade(color, 0.6f)));
+        p.reset();
+        p.moveTo(cx + s * 0.28f, cy - s * 0.45f);
+        p.lineTo(cx + s * 0.05f, cy - s * 0.05f);
+        p.lineTo(cx + s * 0.38f, cy - s * 0.05f);
+        p.close();
+        c.drawPath(p, Ui.fill(Ui.shade(color, 0.6f)));
+        c.drawCircle(cx, cy + s * 0.12f, s * 0.3f, Ui.fill(color));
+        c.drawCircle(cx, cy + s * 0.12f, s * 0.3f, Ui.stroke(Ui.shade(color, 0.6f), s * 0.05f));
+        star(c, cx, cy + s * 0.12f, s * 0.14f, Color.WHITE, true);
     }
 }

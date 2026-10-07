@@ -125,4 +125,16 @@ final class Ui {
     static float clamp(float v, float lo, float hi) {
         return Math.max(lo, Math.min(hi, v));
     }
+
+    static int lerp(int a, int b, float t) {
+        t = clamp(t, 0f, 1f);
+        return Color.rgb(
+                (int) (Color.red(a) + (Color.red(b) - Color.red(a)) * t),
+                (int) (Color.green(a) + (Color.green(b) - Color.green(a)) * t),
+                (int) (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t));
+    }
+
+    static int medalColor(int m) {
+        return m >= 3 ? Color.rgb(255, 193, 7) : m == 2 ? Color.rgb(176, 190, 197) : Color.rgb(205, 127, 50);
+    }
 }
