@@ -1,10 +1,9 @@
 package com.example.expresseequilibre.input;
 
-/** Façon de piloter la bille (réglage sauvegardé). La secousse et le souffle restent actifs dans tous les modes. */
+/** Façon de piloter la bille (réglage sauvegardé). La secousse et le souffle restent actifs dans les deux modes. */
 public enum ControlMode {
     TILT("Inclinaison", "Penche l'appareil pour faire rouler la bille.", "Secousse : saut ou mur cassé."),
-    JOYSTICK("Joystick", "Pose un doigt sur le plateau : un joystick", "apparaît là où tu touches."),
-    DRAG("Glisser", "Garde un doigt sur le plateau :", "la bille accélère vers lui.");
+    JOYSTICK("Joystick", "Une manette à l'écran pilote la bille ;", "Saut et Vent sont de l'autre côté.");
 
     public final String label, line1, line2;
 
@@ -15,6 +14,7 @@ public enum ControlMode {
     }
 
     public static ControlMode fromName(String s) {
+        if ("DRAG".equals(s)) return JOYSTICK; // ancien mode "Glisser" supprimé
         try {
             return valueOf(s);
         } catch (Exception e) {

@@ -1,21 +1,21 @@
 package com.example.expresseequilibre.screens;
 
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-
+import com.example.expresseequilibre.game.GameView;
 import com.example.expresseequilibre.input.ControlMode;
 import com.example.expresseequilibre.ui.Icons;
 import com.example.expresseequilibre.ui.Ui;
 import com.example.expresseequilibre.ui.UiButton;
 import com.example.expresseequilibre.ui.UiSlider;
-import com.example.expresseequilibre.game.GameView;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 
-/** Réglages : contrôle de la bille, calibration, sensibilité du micro (avec test en direct), sons, effets. */
+/** Réglages : contrôle de la bille, côté de la manette, calibration, micro (test en direct), sons, effets. */
 public final class SettingsScreen extends Screen {
     private static final ControlMode[] MODES = ControlMode.values();
 
     private final UiButton[] mode = new UiButton[MODES.length];
+    private final UiButton pad = new UiButton("", Ui.SLATE, null);
     private final UiButton calFlat = new UiButton("À plat", Ui.BUTTON, null);
     private final UiButton calCur = new UiButton("Position actuelle", Ui.MUTED, null);
     private final UiButton sound = new UiButton("", Ui.SLATE, null);
@@ -27,8 +27,18 @@ public final class SettingsScreen extends Screen {
 
     public SettingsScreen(GameView g) {
         super(g);
-        for (int i = 0; i < mode.length; i++) mode[i] = new UiButton(MODES[i].label, Ui.MUTED, null);
-        all = new UiButton[]{mode[0], mode[1], mode[2], calFlat, calCur, sound, fx, back};
+        all = new UiButton[mode.length + 6];
+        for (int i = 0; i < mode.length; i++) {
+            mode[i] = new UiButton(MODES[i].label, Ui.MUTED, null);
+            all[i] = mode[i];
+        }
+        int k = mode.length;
+        all[k] = pad;
+        all[k + 1] = calFlat;
+        all[k + 2] = calCur;
+        all[k + 3] = sound;
+        all[k + 4] = fx;
+        all[k + 5] = back;
     }
 
     @Override
@@ -62,39 +72,39 @@ public final class SettingsScreen extends Screen {
         Ui.roundRect(c, L + W * 0.03f, h * 0.19f, L + W * 0.50f, h * 0.97f, pr, Ui.alpha(Color.WHITE, 170));
         Ui.roundRect(c, L + W * 0.515f, h * 0.19f, L + W * 0.97f, h * 0.97f, pr, Ui.alpha(Color.WHITE, 170));
 
-        // ---------- Colonne gauche : contrôle + calibration ----------
+        // ---------- Colonne gauche : contrôle, côté de la manette, calibration ----------
         float x0 = L + W * 0.05f, x1 = L + W * 0.48f, gap = Ui.dp(10), cw = x1 - x0;
         Ui.text(c, "CONTRÔLE DE LA BILLE", x0, h * 0.25f, fl, Ui.PRIMARY, true, Paint.Align.LEFT, cw);
         ControlMode cur = g.progress.controlMode;
-        float bw = (cw - 2 * gap) / 3f;
+        float bw = (cw - gap * (mode.length - 1)) / mode.length;
         for (int i = 0; i < mode.length; i++) {
             UiButton b = mode[i];
             boolean sel = MODES[i] == cur;
             b.color = sel ? Ui.BUTTON : Ui.MUTED;
-            b.set(x0 + i * (bw + gap), h * 0.28f, x0 + i * (bw + gap) + bw, h * 0.42f);
+            b.set(x0 + i * (bw + gap), h * 0.28f, x0 + i * (bw + gap) + bw, h * 0.40f);
             b.draw(c);
             if (sel) Icons.check(c, b.rect.right - Ui.dp(16), b.rect.top + Ui.dp(16), Ui.dp(16), Color.WHITE);
         }
-        Ui.text(c, cur.line1, x0, h * 0.49f, fd, Ui.TEXT, false, Paint.Align.LEFT, cw);
-        Ui.text(c, cur.line2, x0, h * 0.54f, fd, Ui.TEXT, false, Paint.Align.LEFT, cw);
-        Ui.text(c, "Dans tous les modes : secouer = saut, souffler = vent.", x0, h * 0.60f, fd, Ui.MUTED, true,
-                Paint.Align.LEFT, cw);
+        Ui.text(c, cur.line1, x0, h * 0.46f, fd, Ui.TEXT, false, Paint.Align.LEFT, cw);
+        Ui.text(c, cur.line2, x0, h * 0.51f, fd, Ui.TEXT, false, Paint.Align.LEFT, cw);
 
-        Ui.text(c, "CALIBRATION (MODE INCLINAISON)", x0, h * 0.66f, fl, Ui.PRIMARY, true, Paint.Align.LEFT, cw);
+        pad.label = g.progress.padLeft ? "Manette à gauche, boutons à droite" : "Manette à droite, boutons à gauche";
+        pad.set(x0, h * 0.55f, x1, h * 0.65f);
+        pad.draw(c);
+
+        Ui.text(c, "CALIBRATION (MODE INCLINAISON)", x0, h * 0.71f, fl, Ui.PRIMARY, true, Paint.Align.LEFT, cw);
         boolean flat = g.progress.calibFlat;
         calFlat.color = flat ? Ui.BUTTON : Ui.MUTED;
         calCur.color = flat ? Ui.MUTED : Ui.BUTTON;
         float hw = (cw - gap) / 2f;
-        calFlat.set(x0, h * 0.69f, x0 + hw, h * 0.81f);
-        calCur.set(x0 + hw + gap, h * 0.69f, x1, h * 0.81f);
+        calFlat.set(x0, h * 0.74f, x0 + hw, h * 0.85f);
+        calCur.set(x0 + hw + gap, h * 0.74f, x1, h * 0.85f);
         calFlat.draw(c);
         calCur.draw(c);
         UiButton sel = flat ? calFlat : calCur;
         Icons.check(c, sel.rect.right - Ui.dp(16), sel.rect.top + Ui.dp(16), Ui.dp(16), Color.WHITE);
-        Ui.text(c, flat ? "Le neutre est l'horizontale : tablette posée à plat." : "Le neutre est la position tenue au départ.",
-                x0, h * 0.88f, fd, Ui.TEXT, false, Paint.Align.LEFT, cw);
-        Ui.text(c, flat ? "Recommandé : démarrage identique à chaque partie." : "Utile si tu joues tablette inclinée.",
-                x0, h * 0.93f, fd, Ui.MUTED, true, Paint.Align.LEFT, cw);
+        Ui.text(c, flat ? "Neutre = horizontale, tablette posée à plat (conseillé)." : "Neutre = position tenue au départ de la partie.",
+                x0, h * 0.92f, fd, Ui.TEXT, false, Paint.Align.LEFT, cw);
 
         // ---------- Colonne droite : micro, sons, effets ----------
         float x2 = L + W * 0.535f, x3 = L + W * 0.95f, rw = x3 - x2;
@@ -159,7 +169,10 @@ public final class SettingsScreen extends Screen {
                 return;
             }
         }
-        if (clicked == calFlat) {
+        if (clicked == pad) {
+            g.progress.togglePadLeft();
+            g.feedback.vibrate(15);
+        } else if (clicked == calFlat) {
             g.progress.setCalibFlat(true);
             g.sensors.setFlatReference(true);
             g.feedback.vibrate(15);
@@ -173,7 +186,7 @@ public final class SettingsScreen extends Screen {
         } else if (clicked == fx) {
             g.progress.toggleReducedFx();
         } else if (clicked == back) {
-            g.goStart();
+            g.closeSettings();
         }
     }
 

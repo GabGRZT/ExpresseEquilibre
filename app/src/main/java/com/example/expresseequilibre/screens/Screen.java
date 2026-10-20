@@ -1,8 +1,7 @@
 package com.example.expresseequilibre.screens;
 
-import android.graphics.Canvas;
-
 import com.example.expresseequilibre.game.GameView;
+import android.graphics.Canvas;
 
 /** Un écran = une classe : update (état), draw (rendu), événements tactiles. */
 public abstract class Screen {

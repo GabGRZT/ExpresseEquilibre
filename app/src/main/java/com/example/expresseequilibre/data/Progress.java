@@ -1,9 +1,8 @@
 package com.example.expresseequilibre.data;
 
-import android.content.SharedPreferences;
-
 import com.example.expresseequilibre.game.Levels;
 import com.example.expresseequilibre.input.ControlMode;
+import android.content.SharedPreferences;
 
 /** Sauvegarde : étoiles, niveaux terminés et réglages (contrôle, micro, calibration, effets réduits). */
 public final class Progress {
@@ -13,12 +12,14 @@ public final class Progress {
     public ControlMode controlMode;
     public boolean calibFlat;   // true : le neutre est l'horizontale de l'appareil (défaut)
     public float micSens;       // 0..1 (0,5 = réglage d'origine)
+    public boolean padLeft;     // false : manette à droite, boutons à gauche (défaut) ; true : inversé
 
     public Progress(SharedPreferences p) {
         this.p = p;
         reducedFx = p.getBoolean("reducedFx", false);
         controlMode = ControlMode.fromName(p.getString("ctl", "TILT"));
         calibFlat = p.getBoolean("calibFlat", true);
+        padLeft = p.getBoolean("padLeft", false);
         micSens = Math.max(0f, Math.min(1f, p.getFloat("micSens", 0.5f)));
         purgeOldGhosts();
     }
@@ -40,6 +41,11 @@ public final class Progress {
     public void toggleReducedFx() {
         reducedFx = !reducedFx;
         p.edit().putBoolean("reducedFx", reducedFx).apply();
+    }
+
+    public void togglePadLeft() {
+        padLeft = !padLeft;
+        p.edit().putBoolean("padLeft", padLeft).apply();
     }
 
     public void setControlMode(ControlMode m) {

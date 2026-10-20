@@ -1,10 +1,9 @@
 package com.example.expresseequilibre.game;
 
+import com.example.expresseequilibre.ui.Ui;
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Shader;
-
-import com.example.expresseequilibre.ui.Ui;
 
 /** Thème visuel d'un monde. */
 public final class World {

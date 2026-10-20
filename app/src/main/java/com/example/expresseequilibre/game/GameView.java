@@ -1,5 +1,16 @@
 package com.example.expresseequilibre.game;
 
+import com.example.expresseequilibre.data.Progress;
+import com.example.expresseequilibre.input.Feedback;
+import com.example.expresseequilibre.input.SensorController;
+import com.example.expresseequilibre.screens.EndScreen;
+import com.example.expresseequilibre.screens.LevelScreen;
+import com.example.expresseequilibre.screens.PauseScreen;
+import com.example.expresseequilibre.screens.Screen;
+import com.example.expresseequilibre.screens.SettingsScreen;
+import com.example.expresseequilibre.screens.StartScreen;
+import com.example.expresseequilibre.screens.TutorialScreen;
+import com.example.expresseequilibre.ui.Ui;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Canvas;
@@ -9,18 +20,6 @@ import android.view.View;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
-
-import com.example.expresseequilibre.screens.EndScreen;
-import com.example.expresseequilibre.input.Feedback;
-import com.example.expresseequilibre.screens.LevelScreen;
-import com.example.expresseequilibre.screens.PauseScreen;
-import com.example.expresseequilibre.data.Progress;
-import com.example.expresseequilibre.screens.Screen;
-import com.example.expresseequilibre.input.SensorController;
-import com.example.expresseequilibre.screens.SettingsScreen;
-import com.example.expresseequilibre.screens.StartScreen;
-import com.example.expresseequilibre.screens.TutorialScreen;
-import com.example.expresseequilibre.ui.Ui;
 
 /** Chef d'orchestre : boucle update/draw, machine à états, routage tactile (multi-touch). */
 public class GameView extends View {
@@ -59,6 +58,7 @@ public class GameView extends View {
     public int lastStars, lastScore, lastSeconds, bestScore;
     public float lastRunTime;
 
+    private boolean settingsFromPause;
     private float transition;
     private long lastNanos;
     private boolean running;
@@ -191,7 +191,25 @@ public class GameView extends View {
 
     public void goTutorial() { setState(GameState.TUTORIAL); }
 
-    public void goSettings() { setState(GameState.SETTINGS); }
+    public void goSettings() {
+        settingsFromPause = false;
+        setState(GameState.SETTINGS);
+    }
+
+    /** Réglages ouverts depuis la pause : la partie en cours est conservée. */
+    public void goSettingsFromPause() {
+        settingsFromPause = true;
+        setState(GameState.SETTINGS);
+    }
+
+    public void closeSettings() {
+        if (settingsFromPause) {
+            settingsFromPause = false;
+            setState(GameState.PAUSED);
+        } else {
+            goStart();
+        }
+    }
 
     /** "Jouer" sur l'accueil : choix du niveau. */
     public void onPlayPressed() { goLevels(); }
@@ -255,7 +273,7 @@ public class GameView extends View {
                 if (pendingLevel >= 0) { pendingLevel = -1; goLevels(); }
                 else goStart();
                 return true;
-            case SETTINGS:
+            case SETTINGS: closeSettings(); return true;
             case LEVELS: goStart(); return true;
             case WIN:
             case LOSE: goLevels(); return true;

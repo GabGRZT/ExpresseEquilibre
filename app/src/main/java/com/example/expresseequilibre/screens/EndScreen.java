@@ -1,15 +1,13 @@
 package com.example.expresseequilibre.screens;
 
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-
+import com.example.expresseequilibre.game.GameView;
+import com.example.expresseequilibre.game.Levels;
 import com.example.expresseequilibre.ui.Icons;
 import com.example.expresseequilibre.ui.Ui;
 import com.example.expresseequilibre.ui.UiButton;
-import com.example.expresseequilibre.game.GameView;
-import com.example.expresseequilibre.game.Levels;
-
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 import java.util.Locale;
 
 /** Écran de fin : victoire, temps écoulé, ou verdict de la course contre le fantôme. */

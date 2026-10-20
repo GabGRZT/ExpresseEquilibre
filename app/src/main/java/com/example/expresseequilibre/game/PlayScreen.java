@@ -1,16 +1,15 @@
 package com.example.expresseequilibre.game;
 
+import com.example.expresseequilibre.input.ControlMode;
+import com.example.expresseequilibre.screens.Screen;
+import com.example.expresseequilibre.ui.Icons;
+import com.example.expresseequilibre.ui.Ui;
+import com.example.expresseequilibre.ui.UiButton;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.media.ToneGenerator;
-
-import com.example.expresseequilibre.input.ControlMode;
-import com.example.expresseequilibre.ui.Icons;
-import com.example.expresseequilibre.screens.Screen;
-import com.example.expresseequilibre.ui.Ui;
-import com.example.expresseequilibre.ui.UiButton;
 
 import java.util.Random;
 
@@ -41,6 +40,7 @@ public final class PlayScreen extends Screen {
     private boolean[] wallBroken = new boolean[0];
     private boolean[] starGot = new boolean[0];
     private boolean[] pickGot = new boolean[0];
+    private boolean[] pulling = new boolean[0];   // étoile attirée par l'aimant à cette image
     private float[] starX = new float[0], starY = new float[0];
 
     // ---------- Boutons ----------
@@ -90,7 +90,10 @@ public final class PlayScreen extends Screen {
     // ---------- Géométrie écran ----------
     private long layoutKey = -1;
     private float bl, bt, br, bb, bw, bh, s = 1f;
-    private float lcl, lcr, rcl, rcr;
+    private float acl, acr;                 // colonne gauche (ou colonne des boutons en mode Joystick)
+    private float rcl, rcr;                 // colonne droite (Souffle) : modes sans manette
+    private float zl, zr, zt, zb;           // zone de la manette (mode Joystick)
+    private boolean joyZone;
     private final Path clip = new Path();
 
     public PlayScreen(GameView g) {
@@ -112,6 +115,7 @@ public final class PlayScreen extends Screen {
         wallBroken = new boolean[lv.walls.length];
         starGot = new boolean[lv.stars.length];
         pickGot = new boolean[lv.pickups.length];
+        pulling = new boolean[lv.stars.length];
         starX = new float[lv.stars.length];
         starY = new float[lv.stars.length];
     }
@@ -129,6 +133,7 @@ public final class PlayScreen extends Screen {
             starY[i] = level.stars[i][1];
         }
         for (int i = 0; i < pickGot.length; i++) pickGot[i] = false;
+        for (int i = 0; i < pulling.length; i++) pulling[i] = false;
         for (int i = 0; i < eff.length; i++) eff[i] = 0f;
         airLeft = jumpCd = fanLeft = fanCd = 0f;
         flash = shakeT = toastT = 0f;
@@ -155,18 +160,45 @@ public final class PlayScreen extends Screen {
 
     private void layout(int w, int h) {
         int il = g.insetLeft, ir = g.insetRight, it = g.insetTop;
+        ControlMode mode = g.progress.controlMode;
+        boolean padLeft = g.progress.padLeft;
         long key = ((((long) w * 31 + h) * 31 + il) * 31 + ir) * 31 + it;
+        key = key * 31 + mode.ordinal() * 2 + (padLeft ? 1 : 0);
         if (key == layoutKey) return;
         layoutKey = key;
 
         float margin = Ui.dp(10);
-        float colW = Math.max(Ui.dp(70), (w - il - ir) * 0.12f);
-        lcl = il + margin;
-        lcr = lcl + colW;
-        rcr = w - ir - margin;
-        rcl = rcr - colW;
+        float usable = w - il - ir;
+        float colW = Math.max(Ui.dp(80), usable * 0.13f);
+        joyZone = mode == ControlMode.JOYSTICK;
+        float zoneW = joyZone ? Math.max(Ui.dp(150), usable * 0.19f) : 0f;
+        zt = h * 0.06f;
+        zb = h * 0.94f;
 
-        float al = lcr + margin, ar = rcl - margin;
+        float al, ar;
+        if (!joyZone) { // Inclinaison : comme avant, un bouton Souffle de chaque côté
+            float cw = Math.max(Ui.dp(70), usable * 0.12f);
+            acl = il + margin;
+            acr = acl + cw;
+            rcr = w - ir - margin;
+            rcl = rcr - cw;
+            al = acr + margin;
+            ar = rcl - margin;
+        } else if (!padLeft) { // Joystick : boutons à gauche, manette à droite (défaut)
+            acl = il + margin;
+            acr = acl + colW;
+            zr = w - ir - margin;
+            zl = zr - zoneW;
+            al = acr + margin;
+            ar = zl - margin;
+        } else {               // Joystick inversé
+            acr = w - ir - margin;
+            acl = acr - colW;
+            zl = il + margin;
+            zr = zl + zoneW;
+            al = zr + margin;
+            ar = acl - margin;
+        }
         float at = Math.max(h * 0.15f, it + h * 0.10f), ab = h * 0.96f;
         float aw = ar - al, ah = ab - at;
         s = Math.min(aw / Level.W, ah / Level.H);   // échelle uniforme : jamais d'écrasement
@@ -224,47 +256,25 @@ public final class PlayScreen extends Screen {
 
         // intention du joueur -> accélération (inversée par le malus), selon le mode de contrôle choisi
         float sgn = on(Pickup.INVERT) ? -1f : 1f;
-        ControlMode mode = g.progress.controlMode;
-        if (mode == ControlMode.DRAG) {
-            tiltX = tiltY = 0f;
-            if (ctlId >= 0) { // la bille accélère vers le doigt (coordonnées écran -> logiques)
-                float dx = (ctlX - bl) / s - x, dy = (ctlY - bt) / s - y;
-                float d = (float) Math.hypot(dx, dy);
-                if (d > radius() * 0.4f) {
-                    float nx = dx / d * sgn, ny = dy / d * sgn;
-                    float want = Math.min(MAX_SPEED, d * 3.5f);
-                    float auth = (0.5f + 0.5f * Math.min(1f, level.friction)) * (on(Pickup.ICE) ? 0.6f : 1f);
-                    float ddx = nx * want - vx, ddy = ny * want - vy;
-                    float dm = (float) Math.hypot(ddx, ddy), cap = TILT_ACC * auth * dt;
-                    if (dm > cap) { ddx *= cap / dm; ddy *= cap / dm; }
-                    vx += ddx;
-                    vy += ddy;
-                    float mag = Math.min(1f, d / 250f);
-                    tiltX = nx * mag;
-                    tiltY = ny * mag;
-                }
+        float ax = 0f, ay = 0f;
+        if (g.progress.controlMode == ControlMode.TILT) {
+            ax = g.sensors.tiltX();
+            ay = g.sensors.tiltY();
+        } else if (ctlId >= 0) { // manette flottante
+            float jr = stickRadius();
+            float dx = ctlX - ctlBaseX, dy = ctlY - ctlBaseY;
+            float d = (float) Math.hypot(dx, dy);
+            if (d > jr * 0.12f) {
+                float k = Math.min(1f, d / jr);
+                k *= 0.4f + 0.6f * k;
+                ax = dx / d * k;
+                ay = dy / d * k;
             }
-        } else {
-            float ax = 0f, ay = 0f;
-            if (mode == ControlMode.TILT) {
-                ax = g.sensors.tiltX();
-                ay = g.sensors.tiltY();
-            } else if (ctlId >= 0) { // joystick flottant
-                float jr = stickRadius();
-                float dx = ctlX - ctlBaseX, dy = ctlY - ctlBaseY;
-                float d = (float) Math.hypot(dx, dy);
-                if (d > jr * 0.12f) {
-                    float k = Math.min(1f, d / jr);
-                    k *= 0.4f + 0.6f * k;
-                    ax = dx / d * k;
-                    ay = dy / d * k;
-                }
-            }
-            tiltX = ax * sgn;
-            tiltY = ay * sgn;
-            vx += tiltX * TILT_ACC * dt;
-            vy += tiltY * TILT_ACC * dt;
         }
+        tiltX = ax * sgn;
+        tiltY = ay * sgn;
+        vx += tiltX * TILT_ACC * dt;
+        vy += tiltY * TILT_ACC * dt;
         tiltMag = Math.min(1f, (float) Math.hypot(tiltX, tiltY));
 
         if (fanLeft > 0f) {
@@ -316,22 +326,16 @@ public final class PlayScreen extends Screen {
 
         // étoiles (+ aimant)
         for (int i = 0; i < starGot.length; i++) {
+            pulling[i] = false;
             if (starGot[i]) continue;
             float dx = x - starX[i], dy = y - starY[i];
             float d = (float) Math.hypot(dx, dy);
             if (on(Pickup.MAGNET) && d < 450f && d > 1f) {
                 starX[i] += dx / d * 380f * dt;
                 starY[i] += dy / d * 380f * dt;
+                pulling[i] = true;
             }
-            if (d < r + STAR_R) {
-                starGot[i] = true;
-                starCount++;
-                addRing(starX[i], starY[i], Ui.STAR);
-                burst(starX[i], starY[i], Ui.STAR, 10, 260f, 9f);
-                toast("Étoile " + starCount + "/3", Ui.OK);
-                g.feedback.vibrate(30);
-                g.feedback.tone(ToneGenerator.TONE_PROP_ACK, 120);
-            }
+            if (d < r + STAR_R) collectStar(i);
         }
 
         // bonus / malus
@@ -346,7 +350,21 @@ public final class PlayScreen extends Screen {
 
         // sortie
         float ex = x - level.exitX, ey = y - level.exitY;
-        if (ex * ex + ey * ey < Level.EXIT_R * Level.EXIT_R) finish(true);
+        if (ex * ex + ey * ey < Level.EXIT_R * Level.EXIT_R) {
+            // filet de sécurité : une étoile en train d'être attirée par l'aimant est validée à la sortie
+            for (int i = 0; i < starGot.length; i++) if (!starGot[i] && pulling[i]) collectStar(i);
+            finish(true);
+        }
+    }
+
+    private void collectStar(int i) {
+        starGot[i] = true;
+        starCount++;
+        addRing(starX[i], starY[i], Ui.STAR);
+        burst(starX[i], starY[i], Ui.STAR, 10, 260f, 9f);
+        toast("Étoile " + starCount + "/3", Ui.OK);
+        g.feedback.vibrate(30);
+        g.feedback.tone(ToneGenerator.TONE_PROP_ACK, 120);
     }
 
     private void apply(Pickup pk, float px, float py) {
@@ -467,7 +485,7 @@ public final class PlayScreen extends Screen {
         g.finishGame(win, starCount, score, (int) timeLeft, runT);
     }
 
-    private float stickRadius() { return Math.max(Ui.dp(55), bh * 0.15f); }
+    private float stickRadius() { return Math.min((zr - zl) * 0.40f, Math.max(Ui.dp(60), bh * 0.20f)); }
 
     private void collideBoard(float r) {
         if (x < r) { x = r; vx = Math.abs(vx) * BOUNCE; }
@@ -838,9 +856,15 @@ public final class PlayScreen extends Screen {
         if (frag) actionBtn.icon = Icons::hammer; else actionBtn.icon = Icons::jump;
         actionBtn.color = frag ? Ui.ORANGE : Ui.BUTTON;
 
-        pauseBtn.set(lcl, h * 0.06f, lcr, h * 0.28f);
-        actionBtn.set(lcl, h * 0.36f, lcr, h * 0.94f);
-        blowBtn.set(rcl, h * 0.36f, rcr, h * 0.94f);
+        if (joyZone) { // Joystick : tous les boutons sous le même pouce
+            pauseBtn.set(acl, h * 0.05f, acr, h * 0.20f);
+            actionBtn.set(acl, h * 0.25f, acr, h * 0.58f);
+            blowBtn.set(acl, h * 0.62f, acr, h * 0.95f);
+        } else {       // Inclinaison : Pause + Saut à gauche, Souffle à droite
+            pauseBtn.set(acl, h * 0.06f, acr, h * 0.28f);
+            actionBtn.set(acl, h * 0.36f, acr, h * 0.94f);
+            blowBtn.set(rcl, h * 0.36f, rcr, h * 0.94f);
+        }
 
         boolean run = phase == Phase.RUN;
         actionBtn.enabled = run;
@@ -887,15 +911,12 @@ public final class PlayScreen extends Screen {
             Ui.text(c, resumeMode ? "Reprise dans un instant" : "Prépare-toi !", cx, ly, fs, wd.hud, true, Paint.Align.CENTER, bw * 0.94f);
         }
         ly += fs * 1.5f;
-        ControlMode cm = g.progress.controlMode;
         String hint;
-        if (cm == ControlMode.TILT) {
+        if (g.progress.controlMode == ControlMode.TILT) {
             hint = g.progress.calibFlat ? "Garde la tablette à plat : c'est la position neutre."
                     : "Tiens l'appareil comme pour jouer : c'est la position neutre.";
-        } else if (cm == ControlMode.JOYSTICK) {
-            hint = "Pose un doigt sur le plateau et glisse : joystick virtuel.";
         } else {
-            hint = "Touche le plateau : la bille accélère vers ton doigt.";
+            hint = "Pose le pouce dans la zone manette : un joystick apparaît.";
         }
         Ui.text(c, hint, cx, ly, fs, wd.hud, false, Paint.Align.CENTER, bw * 0.94f);
         if (!g.sensors.micAvailable()) {
@@ -918,41 +939,37 @@ public final class PlayScreen extends Screen {
         Ui.text(c, toastText, cx, base, size, Ui.alpha(Color.WHITE, (int) (255 * a)), true);
     }
 
-    // ---------- Contrôle tactile : affichage ----------
+    // ---------- Manette : affichage ----------
 
     private void drawTouchControl(Canvas c) {
-        ControlMode mode = g.progress.controlMode;
-        if (mode == ControlMode.TILT) return;
+        if (g.progress.controlMode != ControlMode.JOYSTICK) return;
         World wd = World.of(level.world);
         int col = wd.dark ? Color.WHITE : Ui.PRIMARY;
+        float jr = stickRadius();
+
+        Ui.R.set(zl, zt, zr, zb);
+        c.drawRoundRect(Ui.R, Ui.dp(20), Ui.dp(20), Ui.fill(Ui.alpha(col, 16)));
+        c.drawRoundRect(Ui.R, Ui.dp(20), Ui.dp(20), Ui.stroke(Ui.alpha(col, 70), Ui.dp(2)));
+
         if (ctlId >= 0) {
-            if (mode == ControlMode.JOYSTICK) {
-                float jr = stickRadius();
-                float dx = ctlX - ctlBaseX, dy = ctlY - ctlBaseY;
-                float d = (float) Math.hypot(dx, dy);
-                if (d > jr) { dx *= jr / d; dy *= jr / d; }
-                c.drawCircle(ctlBaseX, ctlBaseY, jr, Ui.fill(Ui.alpha(col, 35)));
-                c.drawCircle(ctlBaseX, ctlBaseY, jr, Ui.stroke(Ui.alpha(col, 150), Ui.dp(3)));
-                c.drawCircle(ctlBaseX + dx, ctlBaseY + dy, jr * 0.38f, Ui.fill(Ui.alpha(col, 190)));
-            } else {
-                float bxs = bl + x * s, bys = bt + y * s;
-                c.drawLine(bxs, bys, ctlX, ctlY, Ui.stroke(Ui.alpha(col, 90), Ui.dp(3)));
-                c.drawCircle(ctlX, ctlY, Ui.dp(26), Ui.stroke(Ui.alpha(col, 200), Ui.dp(3)));
-                c.drawCircle(ctlX, ctlY, Ui.dp(6), Ui.fill(Ui.alpha(col, 200)));
+            float dx = ctlX - ctlBaseX, dy = ctlY - ctlBaseY;
+            float d = (float) Math.hypot(dx, dy);
+            if (d > jr) { dx *= jr / d; dy *= jr / d; }
+            c.drawCircle(ctlBaseX, ctlBaseY, jr, Ui.fill(Ui.alpha(col, 35)));
+            c.drawCircle(ctlBaseX, ctlBaseY, jr, Ui.stroke(Ui.alpha(col, 150), Ui.dp(3)));
+            c.drawCircle(ctlBaseX + dx, ctlBaseY + dy, jr * 0.38f, Ui.fill(Ui.alpha(col, 190)));
+        } else {
+            float cx = (zl + zr) / 2f, cy = (zt + zb) / 2f;
+            c.drawCircle(cx, cy, jr, Ui.stroke(Ui.alpha(col, 90), Ui.dp(3)));
+            c.drawCircle(cx, cy, jr * 0.38f, Ui.fill(Ui.alpha(col, 70)));
+            if (phase == Phase.RUN && runT < 6f) {
+                Ui.text(c, "Pose ton pouce ici", cx, cy + jr * 1.45f, Math.max(Ui.sp(14), bh * 0.04f), wd.hud, true,
+                        Paint.Align.CENTER, (zr - zl) * 0.9f);
             }
-        } else if (phase == Phase.RUN && runT < 6f) { // rappel du geste au début de la partie
-            String t = mode == ControlMode.JOYSTICK ? "Pose un doigt sur le plateau pour piloter"
-                    : "Touche le plateau : la bille vient vers ton doigt";
-            Ui.text(c, t, (bl + br) / 2f, bb - bh * 0.06f, Math.max(Ui.sp(15), bh * 0.042f), wd.hud, true,
-                    Paint.Align.CENTER, bw * 0.85f);
         }
     }
 
     // ---------- Tactile ----------
-
-    private boolean inBoard(float px, float py) {
-        return px >= bl && px <= br && py >= bt && py <= bb;
-    }
 
     @Override
     public void onDown(int id, float px, float py) {
@@ -966,12 +983,14 @@ public final class PlayScreen extends Screen {
             if (hitAct && actionBtn.enabled) onAction();
             if (hitBlow && blowBtn.enabled) tryFan();
         }
-        // joystick / glisser : un doigt posé sur le plateau (hors boutons) prend le pilotage
-        if (!hitPause && !hitAct && !hitBlow && ctlId < 0
-                && g.progress.controlMode != ControlMode.TILT && inBoard(px, py)) {
+        // manette flottante : un doigt posé dans la zone de droite (hors boutons) prend le pilotage
+        if (!hitPause && !hitAct && !hitBlow && ctlId < 0 && joyZone
+                && g.progress.controlMode == ControlMode.JOYSTICK
+                && px >= zl && px <= zr && py >= zt && py <= zb) {
+            float jr = stickRadius();
             ctlId = id;
-            ctlBaseX = ctlX = px;
-            ctlBaseY = ctlY = py;
+            ctlBaseX = ctlX = Ui.clamp(px, zl + jr, zr - jr);
+            ctlBaseY = ctlY = Ui.clamp(py, zt + jr, zb - jr);
         }
     }
 

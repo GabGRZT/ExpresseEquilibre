@@ -1,21 +1,19 @@
 package com.example.expresseequilibre.screens;
 
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-
+import com.example.expresseequilibre.game.GameView;
 import com.example.expresseequilibre.input.ControlMode;
 import com.example.expresseequilibre.ui.Icons;
 import com.example.expresseequilibre.ui.Ui;
 import com.example.expresseequilibre.ui.UiButton;
-import com.example.expresseequilibre.game.GameView;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 
 public final class TutorialScreen extends Screen {
     private static final String[] TITLES = {"Incliner", "Secouer", "Souffler"};
     private static final String[][] FIRST = { // 1re carte selon le mode de contrôle choisi (ordre de ControlMode)
             {"Fais rouler la bille", "en penchant l'appareil"},
-            {"Pose un doigt sur le plateau", "et glisse : joystick virtuel"},
-            {"Garde un doigt sur le plateau :", "la bille va vers lui"}};
+            {"Pose le pouce sur la manette", "et glisse : la bille suit"}};
     private static final String[][] SUBS = {
             {"Une secousse = un saut,", "ou casse un mur fragile"},
             {"Souffle dans le micro :", "le vent te pousse"}};
@@ -80,7 +78,7 @@ public final class TutorialScreen extends Screen {
             Ui.text(c, l2, cx, y + ch * 0.91f, ch * 0.08f, Ui.TEXT, false, Paint.Align.CENTER, cw * 0.9f);
         }
 
-        Ui.text(c, "Les boutons Saut/Casser et Souffle, sur les côtés, servent de secours si un geste n'est pas reconnu.",
+        Ui.text(c, "Les boutons Saut/Casser et Souffle servent de secours si un geste n'est pas reconnu.",
                 cxm, h * 0.76f, Math.max(Ui.sp(14), h * 0.038f), Ui.TEXT, false, Paint.Align.CENTER, W * 0.92f);
         Ui.text(c, "Le mode de contrôle et la sensibilité du micro se changent dans Réglages.",
                 cxm, h * 0.81f, Math.max(Ui.sp(14), h * 0.038f), Ui.MUTED, true, Paint.Align.CENTER, W * 0.92f);

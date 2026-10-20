@@ -1,17 +1,17 @@
 package com.example.expresseequilibre.screens;
 
+import com.example.expresseequilibre.game.GameView;
+import com.example.expresseequilibre.ui.Icons;
+import com.example.expresseequilibre.ui.Ui;
+import com.example.expresseequilibre.ui.UiButton;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 
-import com.example.expresseequilibre.ui.Icons;
-import com.example.expresseequilibre.ui.Ui;
-import com.example.expresseequilibre.ui.UiButton;
-import com.example.expresseequilibre.game.GameView;
-
 public final class PauseScreen extends Screen {
     private final UiButton resume = new UiButton("Reprendre", Ui.BUTTON, Icons::play);
     private final UiButton restart = new UiButton("Recommencer", Ui.SLATE, null);
+    private final UiButton settings = new UiButton("Réglages", Ui.SLATE, null);
     private final UiButton home = new UiButton("Accueil", Ui.SLATE, null);
 
     public PauseScreen(GameView g) {
@@ -35,27 +35,38 @@ public final class PauseScreen extends Screen {
                 lx, h * 0.62f, fs, Color.WHITE, false, Paint.Align.CENTER, W * 0.45f);
 
         float x0 = L + W * 0.56f, x1 = L + W * 0.93f;
-        resume.set(x0, h * 0.16f, x1, h * 0.38f);
-        restart.set(x0, h * 0.46f, x1, h * 0.64f);
-        home.set(x0, h * 0.72f, x1, h * 0.90f);
+        resume.set(x0, h * 0.07f, x1, h * 0.29f);
+        restart.set(x0, h * 0.35f, x1, h * 0.52f);
+        settings.set(x0, h * 0.58f, x1, h * 0.75f);
+        home.set(x0, h * 0.81f, x1, h * 0.96f);
         resume.draw(c);
         restart.draw(c);
+        settings.draw(c);
         home.draw(c);
 
         Ui.text(c, "Un compte à rebours précède la reprise.", lx, h * 0.82f,
                 Math.max(Ui.sp(14), h * 0.04f), Ui.alpha(Color.WHITE, 220), false, Paint.Align.CENTER, W * 0.45f);
     }
 
-    @Override public void onDown(float x, float y) { resume.onDown(x, y); restart.onDown(x, y); home.onDown(x, y); }
+    @Override
+    public void onDown(float x, float y) {
+        resume.onDown(x, y); restart.onDown(x, y); settings.onDown(x, y); home.onDown(x, y);
+    }
 
-    @Override public void onMove(float x, float y) { resume.onMove(x, y); restart.onMove(x, y); home.onMove(x, y); }
+    @Override
+    public void onMove(float x, float y) {
+        resume.onMove(x, y); restart.onMove(x, y); settings.onMove(x, y); home.onMove(x, y);
+    }
 
     @Override
     public void onUp(float x, float y) {
-        if (resume.onUp(x, y)) g.resumeGame();
-        else if (restart.onUp(x, y)) g.beginPlay();
-        else if (home.onUp(x, y)) g.goStart();
+        boolean r = resume.onUp(x, y), re = restart.onUp(x, y), s = settings.onUp(x, y), ho = home.onUp(x, y);
+        if (r) g.resumeGame();
+        else if (re) g.beginPlay();
+        else if (s) g.goSettingsFromPause();
+        else if (ho) g.goStart();
     }
 
-    @Override public void onCancel() { resume.onCancel(); restart.onCancel(); home.onCancel(); }
+    @Override
+    public void onCancel() { resume.onCancel(); restart.onCancel(); settings.onCancel(); home.onCancel(); }
 }

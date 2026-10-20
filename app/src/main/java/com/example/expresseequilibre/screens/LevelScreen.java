@@ -1,16 +1,15 @@
 package com.example.expresseequilibre.screens;
 
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-
-import com.example.expresseequilibre.ui.Icons;
-import com.example.expresseequilibre.ui.Ui;
-import com.example.expresseequilibre.ui.UiButton;
 import com.example.expresseequilibre.game.GameView;
 import com.example.expresseequilibre.game.Level;
 import com.example.expresseequilibre.game.Levels;
 import com.example.expresseequilibre.game.World;
+import com.example.expresseequilibre.ui.Icons;
+import com.example.expresseequilibre.ui.Ui;
+import com.example.expresseequilibre.ui.UiButton;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 
 /** Sélection des niveaux de la campagne. */
 public final class LevelScreen extends Screen {

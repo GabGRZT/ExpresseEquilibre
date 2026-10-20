@@ -1,13 +1,12 @@
 package com.example.expresseequilibre.screens;
 
-import android.graphics.Canvas;
-import android.graphics.Color;
-import android.graphics.Paint;
-
+import com.example.expresseequilibre.game.GameView;
 import com.example.expresseequilibre.ui.Icons;
 import com.example.expresseequilibre.ui.Ui;
 import com.example.expresseequilibre.ui.UiButton;
-import com.example.expresseequilibre.game.GameView;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
 
 public final class StartScreen extends Screen {
     private final UiButton play = new UiButton("Jouer", Ui.BUTTON, Icons::play);
