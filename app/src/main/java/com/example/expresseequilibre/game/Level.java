@@ -1,4 +1,4 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.game;
 
 /**
  * Un niveau, en coordonnées LOGIQUES (plateau fixe de 1600 x 900) :
@@ -8,18 +8,18 @@ package com.example.expresseequilibre;
  * stars   : {x, y}
  * pickups : {x, y} avec le type correspondant dans ptypes
  */
-final class Level {
-    static final float W = 1600f, H = 900f, EXIT_R = 80f;
+public final class Level {
+    public static final float W = 1600f, H = 900f, EXIT_R = 80f;
 
-    final String name;
-    final int world;
-    final float time, friction;
-    final boolean strobe;
-    final float startX, startY, exitX, exitY;
-    final float[][] walls, holes, stars, pickups;
-    final Pickup[] ptypes;
+    public final String name;
+    public final int world;
+    public final float time, friction;
+    public final boolean strobe;
+    public final float startX, startY, exitX, exitY;
+    public final float[][] walls, holes, stars, pickups;
+    public final Pickup[] ptypes;
 
-    Level(String name, int world, float time, float friction, boolean strobe,
+    public Level(String name, int world, float time, float friction, boolean strobe,
           float startX, float startY, float exitX, float exitY,
           float[][] walls, float[][] holes, float[][] stars, float[][] pickups, Pickup[] ptypes) {
         this.name = name;

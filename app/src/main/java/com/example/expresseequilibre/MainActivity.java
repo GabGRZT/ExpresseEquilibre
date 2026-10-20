@@ -14,6 +14,8 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
+import com.example.expresseequilibre.game.GameView;
+
 public class MainActivity extends AppCompatActivity implements GameView.Host {
 
     private static final int REQ_MIC = 42;

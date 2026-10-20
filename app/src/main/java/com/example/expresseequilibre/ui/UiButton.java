@@ -1,4 +1,4 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.ui;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -6,51 +6,51 @@ import android.graphics.Paint;
 import android.graphics.RectF;
 
 /** Gros bouton tactile : état pressé, jauge de recharge, cible élargie, annulation si le doigt sort. */
-final class UiButton {
-    interface Icon { void draw(Canvas c, float cx, float cy, float size, int color); }
+public final class UiButton {
+    public interface Icon { void draw(Canvas c, float cx, float cy, float size, int color); }
 
-    final RectF rect = new RectF();
-    String label;
-    int color;
-    Icon icon;
-    boolean horizontal;      // icône à gauche du texte (sinon au-dessus)
-    boolean fillVertical;    // jauge de bas en haut (boutons hauts)
-    boolean enabled = true;
-    boolean pressed;
-    float fill = 1f;         // 0..1 : jauge de recharge
+    public final RectF rect = new RectF();
+    public String label;
+    public int color;
+    public Icon icon;
+    public boolean horizontal;      // icône à gauche du texte (sinon au-dessus)
+    public boolean fillVertical;    // jauge de bas en haut (boutons hauts)
+    public boolean enabled = true;
+    public boolean pressed;
+    public float fill = 1f;         // 0..1 : jauge de recharge
     private boolean armed;
 
-    UiButton(String label, int color, Icon icon) {
+    public UiButton(String label, int color, Icon icon) {
         this.label = label;
         this.color = color;
         this.icon = icon;
     }
 
-    void set(float l, float t, float r, float b) { rect.set(l, t, r, b); }
+    public void set(float l, float t, float r, float b) { rect.set(l, t, r, b); }
 
-    boolean contains(float x, float y) {
+    public boolean contains(float x, float y) {
         float s = Ui.dp(4);
         return x >= rect.left - s && x <= rect.right + s && y >= rect.top - s && y <= rect.bottom + s;
     }
 
-    void onDown(float x, float y) {
+    public void onDown(float x, float y) {
         if (enabled && contains(x, y)) { armed = true; pressed = true; }
     }
 
-    void onMove(float x, float y) {
+    public void onMove(float x, float y) {
         if (armed) pressed = contains(x, y);
     }
 
-    boolean onUp(float x, float y) {
+    public boolean onUp(float x, float y) {
         boolean click = armed && enabled && contains(x, y);
         armed = false;
         pressed = false;
         return click;
     }
 
-    void onCancel() { armed = false; pressed = false; }
+    public void onCancel() { armed = false; pressed = false; }
 
-    void draw(Canvas c) {
+    public void draw(Canvas c) {
         float w = rect.width(), h = rect.height();
         float m = Math.min(w, h);
         float rad = Math.min(m * 0.26f, Ui.dp(28));

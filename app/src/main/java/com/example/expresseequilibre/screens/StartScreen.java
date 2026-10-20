@@ -1,26 +1,31 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.screens;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 
-final class StartScreen extends Screen {
+import com.example.expresseequilibre.ui.Icons;
+import com.example.expresseequilibre.ui.Ui;
+import com.example.expresseequilibre.ui.UiButton;
+import com.example.expresseequilibre.game.GameView;
+
+public final class StartScreen extends Screen {
     private final UiButton play = new UiButton("Jouer", Ui.BUTTON, Icons::play);
     private final UiButton help = new UiButton("Aide", Ui.SLATE, null);
-    private final UiButton sound = new UiButton("", Ui.SLATE, null);
+    private final UiButton settings = new UiButton("Réglages", Ui.SLATE, null);
     private float t;
 
-    StartScreen(GameView g) {
+    public StartScreen(GameView g) {
         super(g);
         play.horizontal = true;
     }
 
-    @Override void onEnter() { t = 0f; }
+    @Override public void onEnter() { t = 0f; }
 
-    @Override void update(float dt) { t += dt; }
+    @Override public void update(float dt) { t += dt; }
 
     @Override
-    void draw(Canvas c, int w, int h) {
+    public void draw(Canvas c, int w, int h) {
         c.drawColor(Ui.BG);
         float L = g.insetLeft, W = w - g.insetLeft - g.insetRight;
         float lx = L + W * 0.30f; // centre de la colonne gauche
@@ -56,24 +61,22 @@ final class StartScreen extends Screen {
         float x0 = L + W * 0.60f, x1 = L + W * 0.94f;
         play.set(x0, h * 0.14f, x1, h * 0.40f);
         help.set(x0, h * 0.50f, x1, h * 0.68f);
-        sound.set(x0, h * 0.74f, x1, h * 0.92f);
-        sound.label = g.feedback.isEnabled() ? "Sons : OUI" : "Sons : NON";
-        sound.color = g.feedback.isEnabled() ? Ui.SLATE : Ui.MUTED;
+        settings.set(x0, h * 0.74f, x1, h * 0.92f);
         play.draw(c);
         help.draw(c);
-        sound.draw(c);
+        settings.draw(c);
     }
 
-    @Override void onDown(float x, float y) { play.onDown(x, y); help.onDown(x, y); sound.onDown(x, y); }
+    @Override public void onDown(float x, float y) { play.onDown(x, y); help.onDown(x, y); settings.onDown(x, y); }
 
-    @Override void onMove(float x, float y) { play.onMove(x, y); help.onMove(x, y); sound.onMove(x, y); }
+    @Override public void onMove(float x, float y) { play.onMove(x, y); help.onMove(x, y); settings.onMove(x, y); }
 
     @Override
-    void onUp(float x, float y) {
+    public void onUp(float x, float y) {
         if (play.onUp(x, y)) g.onPlayPressed();
         else if (help.onUp(x, y)) g.goTutorial();
-        else if (sound.onUp(x, y)) g.feedback.toggle();
+        else if (settings.onUp(x, y)) g.goSettings();
     }
 
-    @Override void onCancel() { play.onCancel(); help.onCancel(); sound.onCancel(); }
+    @Override public void onCancel() { play.onCancel(); help.onCancel(); settings.onCancel(); }
 }

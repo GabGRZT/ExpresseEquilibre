@@ -1,4 +1,4 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.input;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
@@ -23,7 +23,7 @@ import androidx.core.content.ContextCompat;
  *  2) microphone    -> souffle (ventilateur)
  * Les axes sont exprimés dans le repère de l'ÉCRAN (compatible paysage / paysage inversé).
  */
-final class SensorController implements SensorEventListener {
+public final class SensorController implements SensorEventListener {
 
     // --- Réglages (à ajuster en testant sur un vrai téléphone) ---
     private static final float FILTER_ALPHA = 0.15f;
@@ -54,27 +54,31 @@ final class SensorController implements SensorEventListener {
     private float blowTime;
     private boolean blowPending;
 
-    SensorController(Context context) {
+    // Réglages utilisateur
+    private volatile float micSens = 0.5f;   // 0 = peu sensible, 1 = très sensible
+    private boolean flatReference = true;    // neutre = horizontale (sinon : position au départ)
+
+    public SensorController(Context context) {
         this.context = context;
         sm = (SensorManager) context.getSystemService(Context.SENSOR_SERVICE);
         accel = sm != null ? sm.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) : null;
     }
 
-    boolean hasAccelerometer() { return accel != null; }
+    public boolean hasAccelerometer() { return accel != null; }
 
-    boolean micAvailable() {
+    public boolean micAvailable() {
         return ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
                 == PackageManager.PERMISSION_GRANTED;
     }
 
     // ---------- Cycle de vie ----------
 
-    void start() {
+    public void start() {
         init = false;
         if (accel != null) sm.registerListener(this, accel, SensorManager.SENSOR_DELAY_GAME);
     }
 
-    void stop() {
+    public void stop() {
         if (sm != null) sm.unregisterListener(this);
         setMicActive(false);
     }
@@ -108,7 +112,7 @@ final class SensorController implements SensorEventListener {
             fx = sx;
             fy = sy;
             init = true;
-            if (rotationChanged) { offX = sx; offY = sy; } // recalibration automatique
+            if (rotationChanged && !flatReference) { offX = sx; offY = sy; } // recalibration automatique (mode "position actuelle")
         } else if (now - lastShake > SHAKE_FREEZE_MS) {
             fx += FILTER_ALPHA * (sx - fx);
             fy += FILTER_ALPHA * (sy - fy);
@@ -126,13 +130,27 @@ final class SensorController implements SensorEventListener {
     public void onAccuracyChanged(Sensor sensor, int accuracy) { }
 
     /** La position actuelle du téléphone devient la position neutre. */
-    void calibrate() { offX = fx; offY = fy; }
+    public void calibrate() {
+        if (flatReference) { offX = 0f; offY = 0f; }
+        else { offX = fx; offY = fy; }
+    }
+
+    /** true : le neutre est l'horizontale réelle de l'appareil (posé à plat). false : la position tenue au départ. */
+    public void setFlatReference(boolean flat) {
+        flatReference = flat;
+        if (flat) { offX = 0f; offY = 0f; }
+    }
+
+    public boolean isFlatReference() { return flatReference; }
+
+    /** Sensibilité du souffle, 0..1 (0,5 = réglage d'origine). */
+    public void setMicSensitivity(float v) { micSens = Math.max(0f, Math.min(1f, v)); }
 
     /** Inclinaison -1..1 (positif = vers la droite de l'écran). */
-    float tiltX() { return shape(fx - offX); }
+    public float tiltX() { return shape(fx - offX); }
 
     /** Inclinaison -1..1 (positif = vers le bas de l'écran). */
-    float tiltY() { return shape(fy - offY); }
+    public float tiltY() { return shape(fy - offY); }
 
     private float shape(float v) {
         float a = Math.abs(v);
@@ -142,7 +160,7 @@ final class SensorController implements SensorEventListener {
         return v < 0 ? -n : n;
     }
 
-    boolean consumeShake() {
+    public boolean consumeShake() {
         boolean r = shakePending;
         shakePending = false;
         return r;
@@ -151,7 +169,7 @@ final class SensorController implements SensorEventListener {
     // ---------- Microphone ----------
 
     @SuppressLint("MissingPermission")
-    void setMicActive(boolean on) {
+    public void setMicActive(boolean on) {
         if (!on) {
             micRunning = false;
             micSession++;
@@ -193,13 +211,15 @@ final class SensorController implements SensorEventListener {
         }, "mic-level").start();
     }
 
-    float micLevel() { return micLevel; }
+    public float micLevel() { return micLevel; }
 
-    float micThreshold() {
-        return Math.min(0.5f, Math.max(BLOW_MIN_THRESHOLD, baseline * 3f + 0.06f));
+    public float micThreshold() {
+        float base = Math.min(0.5f, Math.max(BLOW_MIN_THRESHOLD, baseline * 3f + 0.06f));
+        float factor = (float) Math.pow(2.0, 1.0 - 2.0 * micSens); // 0 -> x2 (moins sensible), 0,5 -> x1, 1 -> x0,5
+        return Math.max(0.03f, Math.min(0.8f, base * factor));
     }
 
-    void update(float dt) {
+    public void update(float dt) {
         float level = micLevel;
         float thr = micThreshold();
         if (level > thr) {
@@ -215,7 +235,7 @@ final class SensorController implements SensorEventListener {
         }
     }
 
-    boolean consumeBlow() {
+    public boolean consumeBlow() {
         boolean r = blowPending;
         blowPending = false;
         return r;

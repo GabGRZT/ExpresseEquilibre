@@ -1,4 +1,4 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.game;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -10,43 +10,54 @@ import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
-/** Chef d'orchestre : boucle update/draw, machine à états, routage tactile. */
+import com.example.expresseequilibre.screens.EndScreen;
+import com.example.expresseequilibre.input.Feedback;
+import com.example.expresseequilibre.screens.LevelScreen;
+import com.example.expresseequilibre.screens.PauseScreen;
+import com.example.expresseequilibre.data.Progress;
+import com.example.expresseequilibre.screens.Screen;
+import com.example.expresseequilibre.input.SensorController;
+import com.example.expresseequilibre.screens.SettingsScreen;
+import com.example.expresseequilibre.screens.StartScreen;
+import com.example.expresseequilibre.screens.TutorialScreen;
+import com.example.expresseequilibre.ui.Ui;
+
+/** Chef d'orchestre : boucle update/draw, machine à états, routage tactile (multi-touch). */
 public class GameView extends View {
 
     public interface Host {
         void requestMicPermission(Runnable afterwards);
     }
 
-    public enum GameState { START, MODES, LEVELS, TUTORIAL, PLAYING, PAUSED, WIN, LOSE }
+    public enum GameState { START, LEVELS, TUTORIAL, SETTINGS, PLAYING, PAUSED, WIN, LOSE }
 
-    final SensorController sensors;
-    final Feedback feedback;
-    final Progress progress;
-    final PlayScreen playScreen;
+    public final SensorController sensors;
+    public final Feedback feedback;
+    public final Progress progress;
+    public final PlayScreen playScreen;
 
     private final Host host;
     private final SharedPreferences prefs;
     private final StartScreen startScreen;
-    private final ModeScreen modeScreen;
     private final LevelScreen levelScreen;
     private final TutorialScreen tutorialScreen;
+    private final SettingsScreen settingsScreen;
     private final PauseScreen pauseScreen;
     private final EndScreen endScreen;
 
     private GameState state = GameState.START;
     private Screen current;
 
-    int insetTop, insetBottom, insetLeft, insetRight;
+    public int insetTop, insetBottom, insetLeft, insetRight;
 
-    // Mode et niveau courants
-    boolean ghostMode;
-    int curLevel;
-    int pendingLevel = -1;
+    // Niveau courant
+    public int curLevel;
+    public int pendingLevel = -1;
 
     // Résultat de la dernière partie
-    boolean lastWin, lastRecord, lastNewGhost;
-    int lastStars, lastScore, lastSeconds, bestScore;
-    float lastRunTime, lastGhostDelta = Float.NaN;
+    public boolean lastWin, lastRecord;
+    public int lastStars, lastScore, lastSeconds, bestScore;
+    public float lastRunTime;
 
     private float transition;
     private long lastNanos;
@@ -72,13 +83,15 @@ public class GameView extends View {
         prefs = context.getSharedPreferences("equilibre_express", Context.MODE_PRIVATE);
         progress = new Progress(prefs);
         sensors = new SensorController(context);
+        sensors.setFlatReference(progress.calibFlat);
+        sensors.setMicSensitivity(progress.micSens);
         feedback = new Feedback(context, prefs);
         bestScore = prefs.getInt("best", 0);
 
         startScreen = new StartScreen(this);
-        modeScreen = new ModeScreen(this);
         levelScreen = new LevelScreen(this);
         tutorialScreen = new TutorialScreen(this);
+        settingsScreen = new SettingsScreen(this);
         playScreen = new PlayScreen(this);
         pauseScreen = new PauseScreen(this);
         endScreen = new EndScreen(this);
@@ -95,6 +108,8 @@ public class GameView extends View {
         setState(GameState.START);
     }
 
+    public GameState getState() { return state; }
+
     // ---------- Boucle de jeu ----------
 
     public void startGame() {
@@ -102,7 +117,7 @@ public class GameView extends View {
         running = true;
         lastNanos = 0;
         sensors.start();
-        sensors.setMicActive(state == GameState.PLAYING);
+        sensors.setMicActive(micWanted());
         postOnAnimation(gameLoop);
     }
 
@@ -144,37 +159,44 @@ public class GameView extends View {
 
     // ---------- États et navigation ----------
 
-    void setState(GameState s) {
+    /** Le micro n'écoute qu'en jeu et dans les Réglages (test de sensibilité). */
+    private boolean micWanted() {
+        return state == GameState.PLAYING || state == GameState.SETTINGS;
+    }
+
+    /** Demande la permission micro si besoin, puis (ré)active l'écoute si l'écran en a besoin. */
+    public void requestMic() {
+        host.requestMicPermission(() -> sensors.setMicActive(micWanted()));
+    }
+
+    public void setState(GameState s) {
         state = s;
         switch (s) {
             case START: current = startScreen; break;
-            case MODES: current = modeScreen; break;
             case LEVELS: current = levelScreen; break;
             case TUTORIAL: current = tutorialScreen; break;
+            case SETTINGS: current = settingsScreen; break;
             case PLAYING: current = playScreen; break;
             case PAUSED: current = pauseScreen; break;
             default: current = endScreen; break;
         }
-        sensors.setMicActive(s == GameState.PLAYING);
+        sensors.setMicActive(micWanted());
         transition = (s == GameState.PAUSED) ? 0f : 1f;
         current.onEnter();
     }
 
-    void goStart() { setState(GameState.START); }
+    public void goStart() { setState(GameState.START); }
 
-    void goModes() { setState(GameState.MODES); }
+    public void goLevels() { setState(GameState.LEVELS); }
 
-    void goLevels(boolean ghost) {
-        ghostMode = ghost;
-        setState(GameState.LEVELS);
-    }
+    public void goTutorial() { setState(GameState.TUTORIAL); }
 
-    void goTutorial() { setState(GameState.TUTORIAL); }
+    public void goSettings() { setState(GameState.SETTINGS); }
 
-    /** "Jouer" sur l'accueil : choix du mode. */
-    void onPlayPressed() { goModes(); }
+    /** "Jouer" sur l'accueil : choix du niveau. */
+    public void onPlayPressed() { goLevels(); }
 
-    void startLevel(int lv) {
+    public void startLevel(int lv) {
         curLevel = lv;
         if (!prefs.getBoolean("tutorialSeen", false)) {
             pendingLevel = lv;
@@ -184,7 +206,7 @@ public class GameView extends View {
         }
     }
 
-    void onTutorialDone() {
+    public void onTutorialDone() {
         prefs.edit().putBoolean("tutorialSeen", true).apply();
         if (pendingLevel >= 0) {
             curLevel = pendingLevel;
@@ -197,28 +219,25 @@ public class GameView extends View {
 
     private void launch() { host.requestMicPermission(this::beginPlay); }
 
-    void beginPlay() {
-        playScreen.load(Levels.ALL[curLevel], curLevel, ghostMode);
+    public void beginPlay() {
+        playScreen.load(Levels.ALL[curLevel]);
         playScreen.reset();
         setState(GameState.PLAYING);
     }
 
-    void pauseGame() { setState(GameState.PAUSED); }
+    public void pauseGame() { setState(GameState.PAUSED); }
 
-    void resumeGame() {
+    public void resumeGame() {
         playScreen.beginCountdown(true);
         setState(GameState.PLAYING);
     }
 
-    void finishGame(boolean win, int stars, int score, int secondsLeft,
-                    float runTime, float ghostDelta, boolean newGhost) {
+    public void finishGame(boolean win, int stars, int score, int secondsLeft, float runTime) {
         lastWin = win;
         lastStars = stars;
         lastScore = score;
         lastSeconds = secondsLeft;
         lastRunTime = runTime;
-        lastGhostDelta = ghostDelta;
-        lastNewGhost = newGhost;
         lastRecord = score > bestScore;
         if (lastRecord) {
             bestScore = score;
@@ -228,23 +247,23 @@ public class GameView extends View {
         setState(win ? GameState.WIN : GameState.LOSE);
     }
 
-    boolean handleBack() {
+    public boolean handleBack() {
         switch (state) {
             case PLAYING: pauseGame(); return true;
             case PAUSED: resumeGame(); return true;
             case TUTORIAL:
-                if (pendingLevel >= 0) { pendingLevel = -1; goLevels(ghostMode); }
+                if (pendingLevel >= 0) { pendingLevel = -1; goLevels(); }
                 else goStart();
                 return true;
-            case LEVELS: goModes(); return true;
-            case MODES: goStart(); return true;
+            case SETTINGS:
+            case LEVELS: goStart(); return true;
             case WIN:
-            case LOSE: goLevels(ghostMode); return true;
+            case LOSE: goLevels(); return true;
             default: return false;
         }
     }
 
-    // ---------- Tactile ----------
+    // ---------- Tactile (multi-touch : chaque doigt a un identifiant) ----------
 
     @Override
     public boolean onTouchEvent(MotionEvent e) {
@@ -252,14 +271,16 @@ public class GameView extends View {
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
             case MotionEvent.ACTION_POINTER_DOWN:
-                current.onDown(e.getX(idx), e.getY(idx));
+                current.onDown(e.getPointerId(idx), e.getX(idx), e.getY(idx));
                 break;
             case MotionEvent.ACTION_MOVE:
-                current.onMove(e.getX(), e.getY());
+                for (int i = 0; i < e.getPointerCount(); i++) {
+                    current.onMove(e.getPointerId(i), e.getX(i), e.getY(i));
+                }
                 break;
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_POINTER_UP:
-                current.onUp(e.getX(idx), e.getY(idx));
+                current.onUp(e.getPointerId(idx), e.getX(idx), e.getY(idx));
                 if (e.getActionMasked() == MotionEvent.ACTION_UP) performClick();
                 break;
             case MotionEvent.ACTION_CANCEL:

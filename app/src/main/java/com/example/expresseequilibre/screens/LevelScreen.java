@@ -1,35 +1,40 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.screens;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import java.util.Locale;
 
-/** Sélection des niveaux (campagne ou course contre le fantôme). */
-final class LevelScreen extends Screen {
+import com.example.expresseequilibre.ui.Icons;
+import com.example.expresseequilibre.ui.Ui;
+import com.example.expresseequilibre.ui.UiButton;
+import com.example.expresseequilibre.game.GameView;
+import com.example.expresseequilibre.game.Level;
+import com.example.expresseequilibre.game.Levels;
+import com.example.expresseequilibre.game.World;
+
+/** Sélection des niveaux de la campagne. */
+public final class LevelScreen extends Screen {
     private final UiButton[] tiles = new UiButton[Levels.ALL.length];
     private final UiButton back = new UiButton("Retour", Ui.SLATE, null);
-    private final UiButton fx = new UiButton("", Ui.SLATE, null);
     private String msg = "";
     private float msgT;
 
-    LevelScreen(GameView g) {
+    public LevelScreen(GameView g) {
         super(g);
         for (int i = 0; i < tiles.length; i++) tiles[i] = new UiButton("", Ui.BUTTON, null);
     }
 
-    @Override void onEnter() { msgT = 0f; }
+    @Override public void onEnter() { msgT = 0f; }
 
-    @Override void update(float dt) { msgT = Math.max(0f, msgT - dt); }
+    @Override public void update(float dt) { msgT = Math.max(0f, msgT - dt); }
 
     @Override
-    void draw(Canvas c, int w, int h) {
+    public void draw(Canvas c, int w, int h) {
         c.drawColor(Ui.BG);
         float L = g.insetLeft, W = w - g.insetLeft - g.insetRight;
-        Ui.title(c, g.ghostMode ? "Course contre le fantôme" : "Campagne", L + W / 2f, h * 0.12f, h * 0.085f,
-                Ui.PRIMARY, Paint.Align.CENTER, W * 0.9f);
-        String hint = g.ghostMode ? "Choisis un niveau où tu as déjà un fantôme." : "Termine un niveau pour débloquer le suivant.";
-        Ui.text(c, hint, L + W / 2f, h * 0.18f, Math.max(Ui.sp(14), h * 0.04f), Ui.TEXT, false, Paint.Align.CENTER, W * 0.9f);
+        Ui.title(c, "Campagne", L + W / 2f, h * 0.12f, h * 0.085f, Ui.PRIMARY, Paint.Align.CENTER, W * 0.9f);
+        Ui.text(c, "Termine un niveau pour débloquer le suivant.", L + W / 2f, h * 0.18f,
+                Math.max(Ui.sp(14), h * 0.04f), Ui.TEXT, false, Paint.Align.CENTER, W * 0.9f);
 
         float gap = Ui.dp(14), x0 = L + W * 0.05f, x1 = L + W * 0.95f, y0 = h * 0.22f, y1 = h * 0.80f;
         float tw = (x1 - x0 - 2 * gap) / 3f, th = (y1 - y0 - gap) / 2f;
@@ -41,11 +46,7 @@ final class LevelScreen extends Screen {
         }
 
         back.set(L + W * 0.05f, h * 0.86f, L + W * 0.28f, h * 0.95f);
-        fx.set(L + W * 0.50f, h * 0.86f, L + W * 0.95f, h * 0.95f);
-        fx.label = "Effets lumineux : " + (g.progress.reducedFx ? "RÉDUITS" : "OUI");
-        fx.color = g.progress.reducedFx ? Ui.OK : Ui.SLATE;
         back.draw(c);
-        fx.draw(c);
 
         if (msgT > 0f) {
             float size = Math.max(Ui.sp(16), h * 0.045f);
@@ -59,9 +60,7 @@ final class LevelScreen extends Screen {
     private void drawTile(Canvas c, int i, UiButton b, float tw, float th) {
         Level lv = Levels.ALL[i];
         World wd = World.of(lv.world);
-        boolean unlocked = g.progress.unlocked(i);
-        boolean ghostOk = !g.ghostMode || g.progress.hasGhost(i);
-        boolean playable = unlocked && ghostOk;
+        boolean playable = g.progress.unlocked(i);
 
         float off = b.pressed ? Ui.dp(3) : 0f;
         float l = b.rect.left, t = b.rect.top + off, r = b.rect.right, bo = b.rect.bottom + off;
@@ -88,17 +87,11 @@ final class LevelScreen extends Screen {
             if (k < st) Icons.star(c, sx, sy, th * 0.075f, Color.rgb(200, 130, 0), false);
         }
 
-        float fs = Math.max(Ui.sp(12), th * 0.075f);
-        float by = t + th * 0.88f;
         if (lv.strobe) {
+            float fs = Math.max(Ui.sp(12), th * 0.075f);
+            float by = t + th * 0.88f;
             Icons.flash(c, l + th * 0.14f, by - fs * 0.35f, fs * 1.3f, Ui.ORANGE);
             Ui.text(c, "Lumière clignotante", l + th * 0.26f, by, fs, Ui.ORANGE, true, Paint.Align.LEFT, tw - th * 0.30f);
-        } else if (g.ghostMode && g.progress.hasGhost(i)) {
-            Icons.ghost(c, l + th * 0.14f, by - fs * 0.35f, fs * 1.4f, Ui.PURPLE);
-            Ui.text(c, "Fantôme : " + String.format(Locale.getDefault(), "%.1f", g.progress.ghostTime(i)) + " s",
-                    l + th * 0.26f, by, fs, Ui.PURPLE, true, Paint.Align.LEFT, tw - th * 0.30f);
-        } else if (g.ghostMode) {
-            Ui.text(c, "Pas de fantôme", l + th * 0.14f, by, fs, Ui.MUTED, false, Paint.Align.LEFT, tw - th * 0.2f);
         }
 
         if (!playable) {
@@ -108,30 +101,26 @@ final class LevelScreen extends Screen {
     }
 
     @Override
-    void onDown(float x, float y) {
+    public void onDown(float x, float y) {
         for (UiButton b : tiles) b.onDown(x, y);
         back.onDown(x, y);
-        fx.onDown(x, y);
     }
 
     @Override
-    void onMove(float x, float y) {
+    public void onMove(float x, float y) {
         for (UiButton b : tiles) b.onMove(x, y);
         back.onMove(x, y);
-        fx.onMove(x, y);
     }
 
     @Override
-    void onUp(float x, float y) {
+    public void onUp(float x, float y) {
         for (int i = 0; i < tiles.length; i++) {
             if (!tiles[i].onUp(x, y)) continue;
-            if (!g.progress.unlocked(i)) { say("Termine d'abord le niveau précédent."); }
-            else if (g.ghostMode && !g.progress.hasGhost(i)) { say("Pas encore de fantôme : termine ce niveau en Campagne."); }
+            if (!g.progress.unlocked(i)) say("Termine d'abord le niveau précédent.");
             else g.startLevel(i);
             return;
         }
-        if (back.onUp(x, y)) g.goModes();
-        else if (fx.onUp(x, y)) g.progress.toggleReducedFx();
+        if (back.onUp(x, y)) g.goStart();
     }
 
     private void say(String s) {
@@ -140,9 +129,8 @@ final class LevelScreen extends Screen {
     }
 
     @Override
-    void onCancel() {
+    public void onCancel() {
         for (UiButton b : tiles) b.onCancel();
         back.onCancel();
-        fx.onCancel();
     }
 }

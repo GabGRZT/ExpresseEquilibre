@@ -1,12 +1,19 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.screens;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+
+import com.example.expresseequilibre.ui.Icons;
+import com.example.expresseequilibre.ui.Ui;
+import com.example.expresseequilibre.ui.UiButton;
+import com.example.expresseequilibre.game.GameView;
+import com.example.expresseequilibre.game.Levels;
+
 import java.util.Locale;
 
 /** Écran de fin : victoire, temps écoulé, ou verdict de la course contre le fantôme. */
-final class EndScreen extends Screen {
+public final class EndScreen extends Screen {
     private static final float INPUT_LOCK = 0.7f; // évite un appui involontaire (doigt encore sur un bouton de jeu)
 
     private final UiButton next = new UiButton("Niveau suivant", Ui.OK, null);
@@ -15,50 +22,45 @@ final class EndScreen extends Screen {
     private float age;
     private boolean hasNext;
 
-    EndScreen(GameView g) { super(g); }
+    public EndScreen(GameView g) { super(g); }
 
     @Override
-    void onEnter() {
+    public void onEnter() {
         age = 0f;
         next.onCancel();
         again.onCancel();
         levels.onCancel();
     }
 
-    @Override void update(float dt) { age += dt; }
+    @Override public void update(float dt) { age += dt; }
 
     private static String fmt(float v) { return String.format(Locale.getDefault(), "%.1f", v); }
 
     @Override
-    void draw(Canvas c, int w, int h) {
+    public void draw(Canvas c, int w, int h) {
         c.drawColor(Ui.BG);
         float L = g.insetLeft, W = w - g.insetLeft - g.insetRight;
         float lx = L + W * 0.27f, rx = L + W * 0.74f;
 
         boolean win = g.lastWin;
-        boolean race = g.ghostMode && win && !Float.isNaN(g.lastGhostDelta);
-        boolean beaten = race && g.lastGhostDelta > 0f;
         int main;
         String title, sub;
         if (!win) {
             main = Ui.DANGER;
             title = "Temps écoulé";
             sub = "Retente ta chance, tu y es presque !";
-        } else if (race) {
-            if (beaten) { main = Ui.OK; title = "Fantôme battu !"; sub = "Tu es plus rapide de " + fmt(g.lastGhostDelta) + " s"; }
-            else { main = Ui.PURPLE; title = "Le fantôme gagne"; sub = "Il était plus rapide de " + fmt(-g.lastGhostDelta) + " s"; }
         } else {
             main = Ui.OK;
             title = "Victoire !";
             sub = "Sortie atteinte avec " + g.lastSeconds + " s d'avance";
         }
 
-        if (win && (!race || beaten)) drawConfetti(c, w, h, L, W);
+        if (win) drawConfetti(c, w, h, L, W);
 
         Ui.title(c, title, lx, h * 0.24f, h * 0.14f, main, Paint.Align.CENTER, W * 0.48f);
         Ui.text(c, sub, lx, h * 0.33f, Math.max(Ui.sp(16), h * 0.045f), Ui.TEXT, false, Paint.Align.CENTER, W * 0.48f);
         if (win) {
-            String t2 = "Temps : " + fmt(g.lastRunTime) + " s" + (g.lastNewGhost ? "  ·  nouveau fantôme enregistré" : "");
+            String t2 = "Temps : " + fmt(g.lastRunTime) + " s";
             Ui.text(c, t2, lx, h * 0.40f, Math.max(Ui.sp(14), h * 0.04f), Ui.PURPLE, true, Paint.Align.CENTER, W * 0.48f);
         }
 
@@ -79,7 +81,7 @@ final class EndScreen extends Screen {
         if (g.lastRecord) Ui.text(c, "Nouveau record !", rx, h * 0.44f, info * 1.1f, Ui.GOLD_TEXT, true);
         else Ui.text(c, "Meilleur score : " + g.bestScore, rx, h * 0.44f, info, Ui.TEXT, false);
 
-        hasNext = win && !g.ghostMode && g.curLevel + 1 < Levels.ALL.length;
+        hasNext = win && g.curLevel + 1 < Levels.ALL.length;
         float x0 = L + W * 0.55f, x1 = L + W * 0.93f, mid = x0 + (x1 - x0) * 0.5f, hg = Ui.dp(8);
         if (hasNext) {
             next.set(x0, h * 0.52f, x1, h * 0.70f);
@@ -106,7 +108,7 @@ final class EndScreen extends Screen {
     }
 
     @Override
-    void onDown(float x, float y) {
+    public void onDown(float x, float y) {
         if (age < INPUT_LOCK) return;
         if (hasNext) next.onDown(x, y);
         again.onDown(x, y);
@@ -114,21 +116,21 @@ final class EndScreen extends Screen {
     }
 
     @Override
-    void onMove(float x, float y) {
+    public void onMove(float x, float y) {
         next.onMove(x, y);
         again.onMove(x, y);
         levels.onMove(x, y);
     }
 
     @Override
-    void onUp(float x, float y) {
+    public void onUp(float x, float y) {
         if (hasNext && next.onUp(x, y)) { g.startLevel(g.curLevel + 1); return; }
         if (again.onUp(x, y)) g.beginPlay();
-        else if (levels.onUp(x, y)) g.goLevels(g.ghostMode);
+        else if (levels.onUp(x, y)) g.goLevels();
     }
 
     @Override
-    void onCancel() {
+    public void onCancel() {
         next.onCancel();
         again.onCancel();
         levels.onCancel();

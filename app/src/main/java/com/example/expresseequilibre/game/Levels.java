@@ -1,10 +1,10 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.game;
 
 /** Catalogue de la campagne : 3 mondes, 6 niveaux. */
-final class Levels {
+public final class Levels {
     private Levels() {}
 
-    static final Level[] ALL = {
+    public static final Level[] ALL = {
 
             // ---- Monde 1 : Prairie ----
             new Level("Premiers pas", 0, 60f, 1f, false, 112, 180, 1440, 666,

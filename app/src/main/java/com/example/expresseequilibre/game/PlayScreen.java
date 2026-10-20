@@ -1,4 +1,4 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.game;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -6,14 +6,19 @@ import android.graphics.Paint;
 import android.graphics.Path;
 import android.media.ToneGenerator;
 
-import java.util.Locale;
+import com.example.expresseequilibre.input.ControlMode;
+import com.example.expresseequilibre.ui.Icons;
+import com.example.expresseequilibre.screens.Screen;
+import com.example.expresseequilibre.ui.Ui;
+import com.example.expresseequilibre.ui.UiButton;
+
 import java.util.Random;
 
 /**
  * Écran de jeu. Toute la physique est en coordonnées logiques (plateau 1600 x 900) :
  * le comportement est identique sur tous les appareils.
  */
-final class PlayScreen extends Screen {
+public final class PlayScreen extends Screen {
 
     private enum Phase { COUNTDOWN, RUN }
 
@@ -33,10 +38,6 @@ final class PlayScreen extends Screen {
 
     // ---------- Niveau courant ----------
     private Level level = Levels.ALL[0];
-    private int levelIndex;
-    private boolean ghostMode;
-    private Progress.Ghost ghost;
-    private boolean ghostArrivedShown;
     private boolean[] wallBroken = new boolean[0];
     private boolean[] starGot = new boolean[0];
     private boolean[] pickGot = new boolean[0];
@@ -63,6 +64,10 @@ final class PlayScreen extends Screen {
     private float anim, flash, shakeT;
     private int nearIdx = -1;
 
+    // contrôle tactile (joystick / glisser) : doigt qui pilote la bille
+    private int ctlId = -1;
+    private float ctlBaseX, ctlBaseY, ctlX, ctlY;
+
     private String toastText = "";
     private int toastColor = Ui.OK;
     private float toastT;
@@ -80,11 +85,6 @@ final class PlayScreen extends Screen {
     private int trHead, trCount;
     private float trAcc;
 
-    // enregistrement du fantôme
-    private final short[] recX = new short[2000], recY = new short[2000];
-    private int recN;
-    private float recAcc;
-    private final float[] tmp = new float[2];
     private final Random rnd = new Random();
 
     // ---------- Géométrie écran ----------
@@ -93,33 +93,30 @@ final class PlayScreen extends Screen {
     private float lcl, lcr, rcl, rcr;
     private final Path clip = new Path();
 
-    PlayScreen(GameView g) {
+    public PlayScreen(GameView g) {
         super(g);
         actionBtn.fillVertical = true;
         blowBtn.fillVertical = true;
     }
 
-    int starCount() { return starCount; }
+    public int starCount() { return starCount; }
 
-    float timeLeft() { return timeLeft; }
+    public float timeLeft() { return timeLeft; }
 
-    int worldIndex() { return level.world; }
+    public int worldIndex() { return level.world; }
 
     // ---------- Chargement / démarrage ----------
 
-    void load(Level lv, int index, boolean ghostMode) {
+    public void load(Level lv) {
         level = lv;
-        levelIndex = index;
-        this.ghostMode = ghostMode;
         wallBroken = new boolean[lv.walls.length];
         starGot = new boolean[lv.stars.length];
         pickGot = new boolean[lv.pickups.length];
         starX = new float[lv.stars.length];
         starY = new float[lv.stars.length];
-        ghost = ghostMode ? g.progress.loadGhost(index) : null;
     }
 
-    void reset() {
+    public void reset() {
         timeLeft = level.time;
         starCount = 0;
         runT = 0f;
@@ -136,10 +133,7 @@ final class PlayScreen extends Screen {
         airLeft = jumpCd = fanLeft = fanCd = 0f;
         flash = shakeT = toastT = 0f;
         nearIdx = -1;
-        recN = 0;
-        recAcc = 0f;
         trCount = 0;
-        ghostArrivedShown = false;
         for (int i = 0; i < ringLife.length; i++) ringLife[i] = 0f;
         for (int i = 0; i < PMAX; i++) pLife[i] = 0f;
         x = level.startX;
@@ -148,12 +142,13 @@ final class PlayScreen extends Screen {
         beginCountdown(false);
     }
 
-    void beginCountdown(boolean resume) {
+    public void beginCountdown(boolean resume) {
         phase = Phase.COUNTDOWN;
         countdown = COUNTDOWN_TIME;
         lastCi = 0;
         resumeMode = resume;
         vx = vy = 0f;
+        ctlId = -1; // un doigt resté posé avant la reprise ne pilote plus
     }
 
     // ---------- Mise en page ----------
@@ -190,7 +185,7 @@ final class PlayScreen extends Screen {
     private boolean on(Pickup p) { return eff[p.ordinal()] > 0f; }
 
     @Override
-    void update(float dt) {
+    public void update(float dt) {
         int w = g.getWidth(), h = g.getHeight();
         if (w <= 0 || h <= 0) return;
         layout(w, h);
@@ -227,24 +222,50 @@ final class PlayScreen extends Screen {
         timeLeft -= dt * (on(Pickup.FAST) ? 2f : 1f);
         if (timeLeft <= 0f) { timeLeft = 0f; finish(false); return; }
 
-        // enregistrement du fantôme
-        recAcc += dt;
-        while (recAcc >= Progress.STEP) {
-            recAcc -= Progress.STEP;
-            if (recN < recX.length) { recX[recN] = (short) x; recY[recN] = (short) y; recN++; }
-        }
-        if (ghostMode && ghost != null && !ghostArrivedShown && runT >= ghost.time) {
-            ghostArrivedShown = true;
-            toast("Le fantôme est arrivé !", Ui.PURPLE);
-        }
-
-        // inclinaison -> accélération (inversée par le malus)
+        // intention du joueur -> accélération (inversée par le malus), selon le mode de contrôle choisi
         float sgn = on(Pickup.INVERT) ? -1f : 1f;
-        tiltX = g.sensors.tiltX() * sgn;
-        tiltY = g.sensors.tiltY() * sgn;
+        ControlMode mode = g.progress.controlMode;
+        if (mode == ControlMode.DRAG) {
+            tiltX = tiltY = 0f;
+            if (ctlId >= 0) { // la bille accélère vers le doigt (coordonnées écran -> logiques)
+                float dx = (ctlX - bl) / s - x, dy = (ctlY - bt) / s - y;
+                float d = (float) Math.hypot(dx, dy);
+                if (d > radius() * 0.4f) {
+                    float nx = dx / d * sgn, ny = dy / d * sgn;
+                    float want = Math.min(MAX_SPEED, d * 3.5f);
+                    float auth = (0.5f + 0.5f * Math.min(1f, level.friction)) * (on(Pickup.ICE) ? 0.6f : 1f);
+                    float ddx = nx * want - vx, ddy = ny * want - vy;
+                    float dm = (float) Math.hypot(ddx, ddy), cap = TILT_ACC * auth * dt;
+                    if (dm > cap) { ddx *= cap / dm; ddy *= cap / dm; }
+                    vx += ddx;
+                    vy += ddy;
+                    float mag = Math.min(1f, d / 250f);
+                    tiltX = nx * mag;
+                    tiltY = ny * mag;
+                }
+            }
+        } else {
+            float ax = 0f, ay = 0f;
+            if (mode == ControlMode.TILT) {
+                ax = g.sensors.tiltX();
+                ay = g.sensors.tiltY();
+            } else if (ctlId >= 0) { // joystick flottant
+                float jr = stickRadius();
+                float dx = ctlX - ctlBaseX, dy = ctlY - ctlBaseY;
+                float d = (float) Math.hypot(dx, dy);
+                if (d > jr * 0.12f) {
+                    float k = Math.min(1f, d / jr);
+                    k *= 0.4f + 0.6f * k;
+                    ax = dx / d * k;
+                    ay = dy / d * k;
+                }
+            }
+            tiltX = ax * sgn;
+            tiltY = ay * sgn;
+            vx += tiltX * TILT_ACC * dt;
+            vy += tiltY * TILT_ACC * dt;
+        }
         tiltMag = Math.min(1f, (float) Math.hypot(tiltX, tiltY));
-        vx += tiltX * TILT_ACC * dt;
-        vy += tiltY * TILT_ACC * dt;
 
         if (fanLeft > 0f) {
             fanLeft = Math.max(0f, fanLeft - dt);
@@ -349,7 +370,7 @@ final class PlayScreen extends Screen {
         }
         if (countdown <= 0f) {
             phase = Phase.RUN;
-            g.sensors.calibrate();
+            g.sensors.calibrate(); // mode "à plat" : neutre = horizontale (aucun décalage) ; sinon position actuelle
             toast("GO !", Ui.OK);
             g.feedback.vibrate(40);
             g.feedback.tone(ToneGenerator.TONE_PROP_BEEP2, 200);
@@ -441,16 +462,12 @@ final class PlayScreen extends Screen {
 
     private void finish(boolean win) {
         int score = starCount * 100 + (win ? 200 + (int) (timeLeft * 5f) : 0);
-        float delta = Float.NaN;
-        boolean newGhost = false;
-        if (win) {
-            if (ghost != null) delta = ghost.time - runT;
-            newGhost = g.progress.saveGhostIfBetter(levelIndex, runT, recX, recY, recN);
-        }
         g.feedback.vibrate(win ? 200 : 120);
         g.feedback.tone(win ? ToneGenerator.TONE_PROP_ACK : ToneGenerator.TONE_PROP_NACK, 300);
-        g.finishGame(win, starCount, score, (int) timeLeft, runT, delta, newGhost);
+        g.finishGame(win, starCount, score, (int) timeLeft, runT);
     }
+
+    private float stickRadius() { return Math.max(Ui.dp(55), bh * 0.15f); }
 
     private void collideBoard(float r) {
         if (x < r) { x = r; vx = Math.abs(vx) * BOUNCE; }
@@ -545,17 +562,18 @@ final class PlayScreen extends Screen {
     // ---------- Dessin ----------
 
     @Override
-    void draw(Canvas c, int w, int h) {
+    public void draw(Canvas c, int w, int h) {
         layout(w, h);
         drawWorld(c, w, h);
         drawHud(c, w, h);
+        drawTouchControl(c);
         drawControls(c, w, h);
         if (phase == Phase.COUNTDOWN) drawCountdown(c, w, h);
         drawToast(c, w);
     }
 
     /** Plateau + objets. Utilisé aussi par l'écran de pause (en fond). */
-    void drawWorld(Canvas c, int w, int h) {
+    public void drawWorld(Canvas c, int w, int h) {
         layout(w, h);
         World wd = World.of(level.world);
         c.drawColor(wd.bg);
@@ -611,7 +629,6 @@ final class PlayScreen extends Screen {
         }
 
         if (fanLeft > 0f) drawWind(c, px);
-        if (ghostMode && ghost != null) drawGhost(c, px);
 
         // niveau stroboscopique : le plateau s'éteint, la bille reste visible
         float vis = strobeVis();
@@ -730,14 +747,6 @@ final class PlayScreen extends Screen {
         }
     }
 
-    private void drawGhost(Canvas c, float px) {
-        ghost.pos(phase == Phase.RUN ? runT : 0f, tmp);
-        float gx = tmp[0], gy = tmp[1];
-        c.drawCircle(gx, gy, BALL_R, Ui.fill(Ui.alpha(Ui.PURPLE, 110)));
-        c.drawCircle(gx, gy, BALL_R, Ui.stroke(Ui.alpha(Ui.PURPLE, 210), 4f));
-        Icons.ghost(c, gx, gy, BALL_R * 1.3f, Ui.alpha(Color.WHITE, 230));
-    }
-
     private void drawBall(Canvas c, World wd, float px, boolean glow) {
         float r = radius();
         float sp = (float) Math.hypot(vx, vy);
@@ -821,12 +830,6 @@ final class PlayScreen extends Screen {
             Ui.R.set(bl, bt, br, bb);
             c.drawRoundRect(Ui.R, Ui.dp(16), Ui.dp(16), Ui.stroke(Ui.alpha(Ui.DANGER, a), Ui.dp(5)));
         }
-
-        if (ghostMode && ghost != null) {
-            Ui.text(c, "Fantôme : " + String.format(Locale.getDefault(), "%.1f", ghost.time) + " s",
-                    (bl + br) / 2f, mid + Ui.sp(16) * 0.35f, Ui.sp(16), Ui.alpha(wd.dark ? Color.WHITE : Ui.PURPLE, 240),
-                    true, Paint.Align.CENTER, bw * 0.25f);
-        }
     }
 
     private void drawControls(Canvas c, int w, int h) {
@@ -876,18 +879,25 @@ final class PlayScreen extends Screen {
         Ui.title(c, level.name, cx, ly, fs * 1.4f, wd.hud, Paint.Align.CENTER, bw * 0.9f);
         ly += fs * 1.8f;
         if (level.strobe) {
-            Ui.text(c, "ATTENTION : lumières clignotantes (réglage « Effets lumineux » dans les niveaux).",
+            Ui.text(c, "ATTENTION : lumières clignotantes (réglable dans Réglages > Effets lumineux).",
                     cx, ly, fs, wd.dark ? Color.WHITE : Ui.DANGER, true, Paint.Align.CENTER, bw * 0.94f);
             ly += fs * 1.5f;
             Ui.text(c, "Le plateau s'éteint : mémorise ce que tu vois !", cx, ly, fs, wd.hud, false, Paint.Align.CENTER, bw * 0.94f);
-        } else if (ghostMode && ghost != null) {
-            Ui.text(c, "Bats ton fantôme (" + String.format(Locale.getDefault(), "%.1f", ghost.time) + " s) !",
-                    cx, ly, fs, wd.hud, true, Paint.Align.CENTER, bw * 0.94f);
         } else {
             Ui.text(c, resumeMode ? "Reprise dans un instant" : "Prépare-toi !", cx, ly, fs, wd.hud, true, Paint.Align.CENTER, bw * 0.94f);
         }
         ly += fs * 1.5f;
-        Ui.text(c, "Tiens le téléphone comme pour jouer : c'est la position neutre.", cx, ly, fs, wd.hud, false, Paint.Align.CENTER, bw * 0.94f);
+        ControlMode cm = g.progress.controlMode;
+        String hint;
+        if (cm == ControlMode.TILT) {
+            hint = g.progress.calibFlat ? "Garde la tablette à plat : c'est la position neutre."
+                    : "Tiens l'appareil comme pour jouer : c'est la position neutre.";
+        } else if (cm == ControlMode.JOYSTICK) {
+            hint = "Pose un doigt sur le plateau et glisse : joystick virtuel.";
+        } else {
+            hint = "Touche le plateau : la bille accélère vers ton doigt.";
+        }
+        Ui.text(c, hint, cx, ly, fs, wd.hud, false, Paint.Align.CENTER, bw * 0.94f);
         if (!g.sensors.micAvailable()) {
             ly += fs * 1.5f;
             Ui.text(c, "Micro indisponible : utilise le bouton Souffle.", cx, ly, fs,
@@ -908,35 +918,82 @@ final class PlayScreen extends Screen {
         Ui.text(c, toastText, cx, base, size, Ui.alpha(Color.WHITE, (int) (255 * a)), true);
     }
 
+    // ---------- Contrôle tactile : affichage ----------
+
+    private void drawTouchControl(Canvas c) {
+        ControlMode mode = g.progress.controlMode;
+        if (mode == ControlMode.TILT) return;
+        World wd = World.of(level.world);
+        int col = wd.dark ? Color.WHITE : Ui.PRIMARY;
+        if (ctlId >= 0) {
+            if (mode == ControlMode.JOYSTICK) {
+                float jr = stickRadius();
+                float dx = ctlX - ctlBaseX, dy = ctlY - ctlBaseY;
+                float d = (float) Math.hypot(dx, dy);
+                if (d > jr) { dx *= jr / d; dy *= jr / d; }
+                c.drawCircle(ctlBaseX, ctlBaseY, jr, Ui.fill(Ui.alpha(col, 35)));
+                c.drawCircle(ctlBaseX, ctlBaseY, jr, Ui.stroke(Ui.alpha(col, 150), Ui.dp(3)));
+                c.drawCircle(ctlBaseX + dx, ctlBaseY + dy, jr * 0.38f, Ui.fill(Ui.alpha(col, 190)));
+            } else {
+                float bxs = bl + x * s, bys = bt + y * s;
+                c.drawLine(bxs, bys, ctlX, ctlY, Ui.stroke(Ui.alpha(col, 90), Ui.dp(3)));
+                c.drawCircle(ctlX, ctlY, Ui.dp(26), Ui.stroke(Ui.alpha(col, 200), Ui.dp(3)));
+                c.drawCircle(ctlX, ctlY, Ui.dp(6), Ui.fill(Ui.alpha(col, 200)));
+            }
+        } else if (phase == Phase.RUN && runT < 6f) { // rappel du geste au début de la partie
+            String t = mode == ControlMode.JOYSTICK ? "Pose un doigt sur le plateau pour piloter"
+                    : "Touche le plateau : la bille vient vers ton doigt";
+            Ui.text(c, t, (bl + br) / 2f, bb - bh * 0.06f, Math.max(Ui.sp(15), bh * 0.042f), wd.hud, true,
+                    Paint.Align.CENTER, bw * 0.85f);
+        }
+    }
+
     // ---------- Tactile ----------
 
+    private boolean inBoard(float px, float py) {
+        return px >= bl && px <= br && py >= bt && py <= bb;
+    }
+
     @Override
-    void onDown(float px, float py) {
+    public void onDown(int id, float px, float py) {
+        boolean hitPause = pauseBtn.contains(px, py);
+        boolean hitAct = actionBtn.contains(px, py);
+        boolean hitBlow = blowBtn.contains(px, py);
         pauseBtn.onDown(px, py);
         actionBtn.onDown(px, py);
         blowBtn.onDown(px, py);
         if (phase == Phase.RUN) {
-            if (actionBtn.pressed) onAction();
-            if (blowBtn.pressed) tryFan();
+            if (hitAct && actionBtn.enabled) onAction();
+            if (hitBlow && blowBtn.enabled) tryFan();
+        }
+        // joystick / glisser : un doigt posé sur le plateau (hors boutons) prend le pilotage
+        if (!hitPause && !hitAct && !hitBlow && ctlId < 0
+                && g.progress.controlMode != ControlMode.TILT && inBoard(px, py)) {
+            ctlId = id;
+            ctlBaseX = ctlX = px;
+            ctlBaseY = ctlY = py;
         }
     }
 
     @Override
-    void onMove(float px, float py) {
+    public void onMove(int id, float px, float py) {
+        if (id == ctlId) { ctlX = px; ctlY = py; return; }
         pauseBtn.onMove(px, py);
         actionBtn.onMove(px, py);
         blowBtn.onMove(px, py);
     }
 
     @Override
-    void onUp(float px, float py) {
+    public void onUp(int id, float px, float py) {
+        if (id == ctlId) { ctlId = -1; return; }
         actionBtn.onUp(px, py);
         blowBtn.onUp(px, py);
         if (pauseBtn.onUp(px, py)) g.pauseGame();
     }
 
     @Override
-    void onCancel() {
+    public void onCancel() {
+        ctlId = -1;
         pauseBtn.onCancel();
         actionBtn.onCancel();
         blowBtn.onCancel();

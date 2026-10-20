@@ -1,21 +1,26 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.screens;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 
-final class PauseScreen extends Screen {
+import com.example.expresseequilibre.ui.Icons;
+import com.example.expresseequilibre.ui.Ui;
+import com.example.expresseequilibre.ui.UiButton;
+import com.example.expresseequilibre.game.GameView;
+
+public final class PauseScreen extends Screen {
     private final UiButton resume = new UiButton("Reprendre", Ui.BUTTON, Icons::play);
     private final UiButton restart = new UiButton("Recommencer", Ui.SLATE, null);
     private final UiButton home = new UiButton("Accueil", Ui.SLATE, null);
 
-    PauseScreen(GameView g) {
+    public PauseScreen(GameView g) {
         super(g);
         resume.horizontal = true;
     }
 
     @Override
-    void draw(Canvas c, int w, int h) {
+    public void draw(Canvas c, int w, int h) {
         g.playScreen.drawWorld(c, w, h);          // le plateau reste visible, assombri
         Ui.dim(c, w, h, Ui.alpha(Ui.PRIMARY, 225));
 
@@ -41,16 +46,16 @@ final class PauseScreen extends Screen {
                 Math.max(Ui.sp(14), h * 0.04f), Ui.alpha(Color.WHITE, 220), false, Paint.Align.CENTER, W * 0.45f);
     }
 
-    @Override void onDown(float x, float y) { resume.onDown(x, y); restart.onDown(x, y); home.onDown(x, y); }
+    @Override public void onDown(float x, float y) { resume.onDown(x, y); restart.onDown(x, y); home.onDown(x, y); }
 
-    @Override void onMove(float x, float y) { resume.onMove(x, y); restart.onMove(x, y); home.onMove(x, y); }
+    @Override public void onMove(float x, float y) { resume.onMove(x, y); restart.onMove(x, y); home.onMove(x, y); }
 
     @Override
-    void onUp(float x, float y) {
+    public void onUp(float x, float y) {
         if (resume.onUp(x, y)) g.resumeGame();
         else if (restart.onUp(x, y)) g.beginPlay();
         else if (home.onUp(x, y)) g.goStart();
     }
 
-    @Override void onCancel() { resume.onCancel(); restart.onCancel(); home.onCancel(); }
+    @Override public void onCancel() { resume.onCancel(); restart.onCancel(); home.onCancel(); }
 }

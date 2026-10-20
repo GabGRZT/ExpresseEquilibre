@@ -1,14 +1,16 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.game;
 
 import android.graphics.Color;
 import android.graphics.LinearGradient;
 import android.graphics.Shader;
 
+import com.example.expresseequilibre.ui.Ui;
+
 /** Thème visuel d'un monde. */
-final class World {
-    final String name;
-    final boolean dark;
-    final int bg, board1, board2, wall, wallTop, rim, hud, accent, grid;
+public final class World {
+    public final String name;
+    public final boolean dark;
+    public final int bg, board1, board2, wall, wallTop, rim, hud, accent, grid;
     private LinearGradient shader;
 
     private World(String name, boolean dark, int bg, int board1, int board2, int wall, int wallTop,
@@ -27,12 +29,12 @@ final class World {
     }
 
     /** Dégradé du plateau, en coordonnées logiques (créé une seule fois). */
-    Shader boardShader() {
+    public Shader boardShader() {
         if (shader == null) shader = new LinearGradient(0, 0, 0, Level.H, board1, board2, Shader.TileMode.CLAMP);
         return shader;
     }
 
-    static final World[] ALL = {
+    public static final World[] ALL = {
             new World("Prairie", false, Ui.BG, Color.rgb(250, 252, 255), Color.rgb(232, 244, 236),
                     Ui.WALL, Color.rgb(110, 135, 170), Color.rgb(70, 82, 110), Ui.PRIMARY, Ui.BUTTON,
                     Ui.alpha(Ui.PRIMARY, 18)),
@@ -44,7 +46,7 @@ final class World {
                     Color.WHITE, Color.rgb(0, 131, 143), Ui.alpha(Color.rgb(0, 229, 255), 40))
     };
 
-    static World of(int i) {
+    public static World of(int i) {
         return ALL[Math.max(0, Math.min(ALL.length - 1, i))];
     }
 }

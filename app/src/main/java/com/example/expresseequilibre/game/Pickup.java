@@ -1,7 +1,10 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.game;
+
+import com.example.expresseequilibre.ui.Icons;
+import com.example.expresseequilibre.ui.UiButton;
 
 /** Bonus (bulles rondes vertes) et malus (bulles en losange rouges). */
-enum Pickup {
+public enum Pickup {
     CLOCK("Horloge : +5 s", true, 0f, Icons::clock),
     SPRING("Ressort : sauts longs", true, 12f, Icons::spring),
     MAGNET("Aimant : étoiles attirées", true, 10f, Icons::magnet),
@@ -12,10 +15,10 @@ enum Pickup {
     FAST("Chrono accéléré !", false, 8f, Icons::fastClock),
     MYSTERY("Bulle mystère", true, 0f, Icons::question);
 
-    final String label;
-    final boolean bonus;
-    final float duration;
-    final UiButton.Icon icon;
+    public final String label;
+    public final boolean bonus;
+    public final float duration;
+    public final UiButton.Icon icon;
 
     Pickup(String label, boolean bonus, float duration, UiButton.Icon icon) {
         this.label = label;
@@ -25,5 +28,5 @@ enum Pickup {
     }
 
     /** Tirage de la bulle mystère. */
-    static final Pickup[] POOL = {CLOCK, SPRING, MAGNET, HAMMER, INVERT, ICE, GIANT, FAST};
+    public static final Pickup[] POOL = {CLOCK, SPRING, MAGNET, HAMMER, INVERT, ICE, GIANT, FAST};
 }

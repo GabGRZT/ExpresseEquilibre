@@ -1,4 +1,4 @@
-package com.example.expresseequilibre;
+package com.example.expresseequilibre.input;
 
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -10,13 +10,13 @@ import android.os.Vibrator;
 
 /** Feedbacks multimodaux : vibration + bips courts (aucun fichier son). Activables/désactivables. */
 @SuppressWarnings("deprecation")
-final class Feedback {
+public final class Feedback {
     private final Vibrator vibrator;
     private final SharedPreferences prefs;
     private ToneGenerator tone;
     private boolean enabled;
 
-    Feedback(Context ctx, SharedPreferences prefs) {
+    public Feedback(Context ctx, SharedPreferences prefs) {
         this.prefs = prefs;
         this.enabled = prefs.getBoolean("feedback", true);
         this.vibrator = (Vibrator) ctx.getSystemService(Context.VIBRATOR_SERVICE);
@@ -27,14 +27,14 @@ final class Feedback {
         }
     }
 
-    boolean isEnabled() { return enabled; }
+    public boolean isEnabled() { return enabled; }
 
-    void toggle() {
+    public void toggle() {
         enabled = !enabled;
         prefs.edit().putBoolean("feedback", enabled).apply();
     }
 
-    void vibrate(long ms) {
+    public void vibrate(long ms) {
         if (!enabled || vibrator == null || !vibrator.hasVibrator()) return;
         if (Build.VERSION.SDK_INT >= 26) {
             vibrator.vibrate(VibrationEffect.createOneShot(ms, VibrationEffect.DEFAULT_AMPLITUDE));
@@ -43,12 +43,12 @@ final class Feedback {
         }
     }
 
-    void tone(int type, int ms) {
+    public void tone(int type, int ms) {
         if (!enabled || tone == null) return;
         tone.startTone(type, ms);
     }
 
-    void release() {
+    public void release() {
         if (tone != null) { tone.release(); tone = null; }
     }
 }
