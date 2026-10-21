@@ -26,11 +26,13 @@ public final class Ui {
     public static final int DANGER = Color.rgb(198, 40, 40);
     public static final int PURPLE = Color.rgb(123, 31, 162);
     public static final int ORANGE = Color.rgb(191, 87, 0);
-    public static final int BOARD = Color.rgb(250, 252, 255);
     public static final int WALL = Color.rgb(69, 90, 120);
     public static final int HOLE = Color.rgb(28, 33, 48);
     public static final int TEXT = Color.rgb(25, 40, 60);
     public static final int GOLD_TEXT = Color.rgb(150, 85, 0);
+    public static final int STAR_EDGE = Color.rgb(200, 130, 0);
+    public static final int FRAGILE = Color.rgb(186, 140, 92);      // mur fragile
+    public static final int FRAGILE_TOP = Color.rgb(214, 172, 120);
 
     public static final Paint P = new Paint(Paint.ANTI_ALIAS_FLAG);
     public static final RectF R = new RectF();
@@ -110,6 +112,11 @@ public final class Ui {
     public static void roundRect(Canvas c, float l, float t, float r, float b, float rad, int color) {
         R.set(l, t, r, b);
         c.drawRoundRect(R, rad, rad, fill(color));
+    }
+
+    /** Contour arrondi d'un rectangle. */
+    public static void outline(Canvas c, RectF r, float rad, int color, float width) {
+        c.drawRoundRect(r, rad, rad, stroke(color, width));
     }
 
     public static void dim(Canvas c, int w, int h, int color) {

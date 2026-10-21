@@ -1,21 +1,48 @@
 package com.example.expresseequilibre.ui;
 
 import android.graphics.Canvas;
-import android.graphics.Paint;
 import android.graphics.Path;
 
-/** Pictogrammes dessinés au Canvas (aucun asset à importer). */
+/** Pictogrammes dessinés au Canvas (aucun asset à importer). Chaque icône tient dans un carré de côté s centré en (cx, cy). */
 public final class Icons {
     private Icons() {}
 
-    public static void play(Canvas c, float cx, float cy, float s, int color) {
+    // ---------- Outils de tracé ----------
+
+    /** Chemin passant par les points x0,y0, x1,y1, ... (réutilise Ui.PATH). */
+    private static Path path(float... xy) {
         Path p = Ui.PATH;
         p.reset();
-        p.moveTo(cx - s * 0.28f, cy - s * 0.40f);
-        p.lineTo(cx - s * 0.28f, cy + s * 0.40f);
-        p.lineTo(cx + s * 0.42f, cy);
+        p.moveTo(xy[0], xy[1]);
+        for (int i = 2; i < xy.length; i += 2) p.lineTo(xy[i], xy[i + 1]);
+        return p;
+    }
+
+    private static void polyline(Canvas c, int color, float width, float... xy) {
+        c.drawPath(path(xy), Ui.stroke(color, width));
+    }
+
+    private static void polygon(Canvas c, int color, float... xy) {
+        Path p = path(xy);
         p.close();
         c.drawPath(p, Ui.fill(color));
+    }
+
+    private static void line(Canvas c, int color, float width, float x0, float y0, float x1, float y1) {
+        c.drawLine(x0, y0, x1, y1, Ui.stroke(color, width));
+    }
+
+    /** Contour d'un téléphone (partagé par les animations Incliner et Secouer). */
+    private static void phone(Canvas c, float cx, float cy, float s, int color) {
+        Ui.R.set(cx - s * 0.2f, cy - s * 0.36f, cx + s * 0.2f, cy + s * 0.36f);
+        c.drawRoundRect(Ui.R, s * 0.06f, s * 0.06f, Ui.stroke(color, s * 0.08f));
+        line(c, color, s * 0.06f, cx - s * 0.06f, cy - s * 0.26f, cx + s * 0.06f, cy - s * 0.26f);
+    }
+
+    // ---------- Commandes ----------
+
+    public static void play(Canvas c, float cx, float cy, float s, int color) {
+        polygon(c, color, cx - s * 0.28f, cy - s * 0.40f, cx - s * 0.28f, cy + s * 0.40f, cx + s * 0.42f, cy);
     }
 
     public static void pause(Canvas c, float cx, float cy, float s, int color) {
@@ -25,14 +52,9 @@ public final class Icons {
     }
 
     public static void jump(Canvas c, float cx, float cy, float s, int color) {
-        Paint p = Ui.stroke(color, s * 0.14f);
-        c.drawLine(cx, cy + s * 0.42f, cx, cy - s * 0.34f, p);
-        Path path = Ui.PATH;
-        path.reset();
-        path.moveTo(cx - s * 0.30f, cy - s * 0.04f);
-        path.lineTo(cx, cy - s * 0.38f);
-        path.lineTo(cx + s * 0.30f, cy - s * 0.04f);
-        c.drawPath(path, Ui.stroke(color, s * 0.14f));
+        float w = s * 0.14f;
+        line(c, color, w, cx, cy + s * 0.42f, cx, cy - s * 0.34f);
+        polyline(c, color, w, cx - s * 0.30f, cy - s * 0.04f, cx, cy - s * 0.38f, cx + s * 0.30f, cy - s * 0.04f);
     }
 
     public static void wind(Canvas c, float cx, float cy, float s, int color) {
@@ -51,9 +73,7 @@ public final class Icons {
     public static void tiltAnim(Canvas c, float cx, float cy, float s, int color, float angle) {
         c.save();
         c.rotate(angle, cx, cy);
-        Ui.R.set(cx - s * 0.2f, cy - s * 0.36f, cx + s * 0.2f, cy + s * 0.36f);
-        c.drawRoundRect(Ui.R, s * 0.06f, s * 0.06f, Ui.stroke(color, s * 0.08f));
-        c.drawLine(cx - s * 0.06f, cy - s * 0.26f, cx + s * 0.06f, cy - s * 0.26f, Ui.stroke(color, s * 0.06f));
+        phone(c, cx, cy, s, color);
         c.restore();
         Ui.R.set(cx - s * 0.52f, cy - s * 0.52f, cx + s * 0.52f, cy + s * 0.52f);
         c.drawArc(Ui.R, 20, 35, false, Ui.stroke(color, s * 0.07f));
@@ -63,16 +83,23 @@ public final class Icons {
     public static void shakeAnim(Canvas c, float cx, float cy, float s, int color, float dx) {
         c.save();
         c.translate(dx, 0f);
-        Ui.R.set(cx - s * 0.2f, cy - s * 0.36f, cx + s * 0.2f, cy + s * 0.36f);
-        c.drawRoundRect(Ui.R, s * 0.06f, s * 0.06f, Ui.stroke(color, s * 0.08f));
-        c.drawLine(cx - s * 0.06f, cy - s * 0.26f, cx + s * 0.06f, cy - s * 0.26f, Ui.stroke(color, s * 0.06f));
+        phone(c, cx, cy, s, color);
         c.restore();
         float m = s * 0.38f;
-        for (int i = -1; i <= 1; i += 2) {
-            c.drawLine(cx + i * m, cy - s * 0.2f, cx + i * (m + s * 0.12f), cy - s * 0.2f, Ui.stroke(color, s * 0.07f));
-            c.drawLine(cx + i * m, cy + s * 0.2f, cx + i * (m + s * 0.12f), cy + s * 0.2f, Ui.stroke(color, s * 0.07f));
+        for (int side = -1; side <= 1; side += 2) {
+            for (int row = -1; row <= 1; row += 2) {
+                line(c, color, s * 0.07f, cx + side * m, cy + row * s * 0.2f, cx + side * (m + s * 0.12f), cy + row * s * 0.2f);
+            }
         }
     }
+
+    /** Joystick : dx, dy (-1..1) décalent la poignée (animation du tutoriel). */
+    public static void joystick(Canvas c, float cx, float cy, float s, int color, float dx, float dy) {
+        c.drawCircle(cx, cy, s * 0.42f, Ui.stroke(color, s * 0.07f));
+        c.drawCircle(cx + dx * s * 0.17f, cy + dy * s * 0.17f, s * 0.20f, Ui.fill(color));
+    }
+
+    // ---------- Étoiles ----------
 
     public static void star(Canvas c, float cx, float cy, float r, int color, boolean filled) {
         Path p = Ui.PATH;
@@ -88,24 +115,26 @@ public final class Icons {
         c.drawPath(p, filled ? Ui.fill(color) : Ui.stroke(color, r * 0.14f));
     }
 
+    /** Étoile de notation : dorée avec contour si gagnée, grise sinon. */
+    public static void rating(Canvas c, float cx, float cy, float r, boolean earned) {
+        star(c, cx, cy, r, earned ? Ui.STAR : Ui.STAR_EMPTY, true);
+        if (earned) star(c, cx, cy, r, Ui.STAR_EDGE, false);
+    }
+
     // ---------- Bonus / malus ----------
 
     public static void clock(Canvas c, float cx, float cy, float s, int color) {
-        c.drawCircle(cx, cy, s * 0.38f, Ui.stroke(color, s * 0.09f));
-        c.drawLine(cx, cy, cx, cy - s * 0.24f, Ui.stroke(color, s * 0.09f));
-        c.drawLine(cx, cy, cx + s * 0.17f, cy + s * 0.08f, Ui.stroke(color, s * 0.09f));
+        float w = s * 0.09f;
+        c.drawCircle(cx, cy, s * 0.38f, Ui.stroke(color, w));
+        line(c, color, w, cx, cy, cx, cy - s * 0.24f);
+        line(c, color, w, cx, cy, cx + s * 0.17f, cy + s * 0.08f);
     }
 
     public static void fastClock(Canvas c, float cx, float cy, float s, int color) {
         clock(c, cx - s * 0.1f, cy, s * 0.85f, color);
         for (int i = 0; i < 2; i++) {
             float x = cx + s * 0.28f + i * s * 0.12f;
-            Path p = Ui.PATH;
-            p.reset();
-            p.moveTo(x, cy - s * 0.14f);
-            p.lineTo(x + s * 0.1f, cy);
-            p.lineTo(x, cy + s * 0.14f);
-            c.drawPath(p, Ui.stroke(color, s * 0.07f));
+            polyline(c, color, s * 0.07f, x, cy - s * 0.14f, x + s * 0.1f, cy, x, cy + s * 0.14f);
         }
     }
 
@@ -136,32 +165,24 @@ public final class Icons {
     public static void hammer(Canvas c, float cx, float cy, float s, int color) {
         c.save();
         c.rotate(35f, cx, cy);
-        c.drawLine(cx, cy - s * 0.05f, cx, cy + s * 0.42f, Ui.stroke(color, s * 0.12f));
+        line(c, color, s * 0.12f, cx, cy - s * 0.05f, cx, cy + s * 0.42f);
         Ui.roundRect(c, cx - s * 0.32f, cy - s * 0.40f, cx + s * 0.32f, cy - s * 0.08f, s * 0.06f, color);
         c.restore();
     }
 
     public static void invert(Canvas c, float cx, float cy, float s, int color) {
-        c.drawLine(cx - s * 0.38f, cy - s * 0.18f, cx + s * 0.38f, cy - s * 0.18f, Ui.stroke(color, s * 0.09f));
-        Path a = Ui.PATH;
-        a.reset();
-        a.moveTo(cx + s * 0.2f, cy - s * 0.34f);
-        a.lineTo(cx + s * 0.4f, cy - s * 0.18f);
-        a.lineTo(cx + s * 0.2f, cy - s * 0.02f);
-        c.drawPath(a, Ui.stroke(color, s * 0.09f));
-        c.drawLine(cx - s * 0.38f, cy + s * 0.18f, cx + s * 0.38f, cy + s * 0.18f, Ui.stroke(color, s * 0.09f));
-        a.reset();
-        a.moveTo(cx - s * 0.2f, cy + s * 0.02f);
-        a.lineTo(cx - s * 0.4f, cy + s * 0.18f);
-        a.lineTo(cx - s * 0.2f, cy + s * 0.34f);
-        c.drawPath(a, Ui.stroke(color, s * 0.09f));
+        float w = s * 0.09f;
+        line(c, color, w, cx - s * 0.38f, cy - s * 0.18f, cx + s * 0.38f, cy - s * 0.18f);
+        polyline(c, color, w, cx + s * 0.2f, cy - s * 0.34f, cx + s * 0.4f, cy - s * 0.18f, cx + s * 0.2f, cy - s * 0.02f);
+        line(c, color, w, cx - s * 0.38f, cy + s * 0.18f, cx + s * 0.38f, cy + s * 0.18f);
+        polyline(c, color, w, cx - s * 0.2f, cy + s * 0.02f, cx - s * 0.4f, cy + s * 0.18f, cx - s * 0.2f, cy + s * 0.34f);
     }
 
     public static void snow(Canvas c, float cx, float cy, float s, int color) {
         for (int k = 0; k < 3; k++) {
             double a = Math.toRadians(k * 60);
             float dx = (float) Math.cos(a) * s * 0.4f, dy = (float) Math.sin(a) * s * 0.4f;
-            c.drawLine(cx - dx, cy - dy, cx + dx, cy + dy, Ui.stroke(color, s * 0.09f));
+            line(c, color, s * 0.09f, cx - dx, cy - dy, cx + dx, cy + dy);
         }
     }
 
@@ -177,14 +198,8 @@ public final class Icons {
     // ---------- Divers ----------
 
     public static void flag(Canvas c, float cx, float cy, float s, int color) {
-        c.drawLine(cx - s * 0.25f, cy + s * 0.42f, cx - s * 0.25f, cy - s * 0.42f, Ui.stroke(color, s * 0.09f));
-        Path p = Ui.PATH;
-        p.reset();
-        p.moveTo(cx - s * 0.25f, cy - s * 0.40f);
-        p.lineTo(cx + s * 0.38f, cy - s * 0.2f);
-        p.lineTo(cx - s * 0.25f, cy);
-        p.close();
-        c.drawPath(p, Ui.fill(color));
+        line(c, color, s * 0.09f, cx - s * 0.25f, cy + s * 0.42f, cx - s * 0.25f, cy - s * 0.42f);
+        polygon(c, color, cx - s * 0.25f, cy - s * 0.40f, cx + s * 0.38f, cy - s * 0.2f, cx - s * 0.25f, cy);
     }
 
     public static void lock(Canvas c, float cx, float cy, float s, int color) {
@@ -194,30 +209,12 @@ public final class Icons {
     }
 
     public static void flash(Canvas c, float cx, float cy, float s, int color) {
-        Path p = Ui.PATH;
-        p.reset();
-        p.moveTo(cx + s * 0.10f, cy - s * 0.45f);
-        p.lineTo(cx - s * 0.25f, cy + s * 0.05f);
-        p.lineTo(cx - s * 0.02f, cy + s * 0.05f);
-        p.lineTo(cx - s * 0.10f, cy + s * 0.45f);
-        p.lineTo(cx + s * 0.25f, cy - s * 0.08f);
-        p.lineTo(cx + s * 0.02f, cy - s * 0.08f);
-        p.close();
-        c.drawPath(p, Ui.fill(color));
+        polygon(c, color,
+                cx + s * 0.10f, cy - s * 0.45f, cx - s * 0.25f, cy + s * 0.05f, cx - s * 0.02f, cy + s * 0.05f,
+                cx - s * 0.10f, cy + s * 0.45f, cx + s * 0.25f, cy - s * 0.08f, cx + s * 0.02f, cy - s * 0.08f);
     }
 
     public static void check(Canvas c, float cx, float cy, float s, int color) {
-        Path p = Ui.PATH;
-        p.reset();
-        p.moveTo(cx - s * 0.30f, cy + s * 0.02f);
-        p.lineTo(cx - s * 0.08f, cy + s * 0.26f);
-        p.lineTo(cx + s * 0.32f, cy - s * 0.24f);
-        c.drawPath(p, Ui.stroke(color, s * 0.14f));
-    }
-
-    /** Joystick : dx, dy (-1..1) décalent la poignée (animation du tutoriel). */
-    public static void joystick(Canvas c, float cx, float cy, float s, int color, float dx, float dy) {
-        c.drawCircle(cx, cy, s * 0.42f, Ui.stroke(color, s * 0.07f));
-        c.drawCircle(cx + dx * s * 0.17f, cy + dy * s * 0.17f, s * 0.20f, Ui.fill(color));
+        polyline(c, color, s * 0.14f, cx - s * 0.30f, cy + s * 0.02f, cx - s * 0.08f, cy + s * 0.26f, cx + s * 0.32f, cy - s * 0.24f);
     }
 }

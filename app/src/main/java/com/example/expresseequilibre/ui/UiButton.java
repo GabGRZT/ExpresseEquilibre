@@ -19,12 +19,21 @@ public final class UiButton {
     public boolean pressed;
     public float fill = 1f;         // 0..1 : jauge de recharge
     private boolean armed;
+    private Runnable onClick;
 
     public UiButton(String label, int color, Icon icon) {
         this.label = label;
         this.color = color;
         this.icon = icon;
     }
+
+    /** Action déclenchée par {@link #click()} (appelée par Screen quand le bouton est relâché dessus). */
+    public UiButton onClick(Runnable action) {
+        onClick = action;
+        return this;
+    }
+
+    public void click() { if (onClick != null) onClick.run(); }
 
     public void set(float l, float t, float r, float b) { rect.set(l, t, r, b); }
 
