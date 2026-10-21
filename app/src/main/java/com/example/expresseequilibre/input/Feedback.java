@@ -48,6 +48,12 @@ public final class Feedback {
         tone.startTone(type, ms);
     }
 
+    /** Vibration et bip en un seul appel. */
+    public void cue(long vibrateMs, int toneType, int toneMs) {
+        vibrate(vibrateMs);
+        tone(toneType, toneMs);
+    }
+
     public void release() {
         if (tone != null) { tone.release(); tone = null; }
     }
