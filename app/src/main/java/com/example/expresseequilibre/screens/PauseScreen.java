@@ -8,11 +8,12 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 
+
 public final class PauseScreen extends Screen {
-    private final UiButton resume = new UiButton("Reprendre", Ui.BUTTON, Icons::play);
-    private final UiButton restart = new UiButton("Recommencer", Ui.SLATE, null);
-    private final UiButton settings = new UiButton("Réglages", Ui.SLATE, null);
-    private final UiButton home = new UiButton("Accueil", Ui.SLATE, null);
+    private final UiButton resume = add("Reprendre", Ui.BUTTON, Icons::play, g::resumeGame);
+    private final UiButton restart = add("Recommencer", Ui.SLATE, null, g::beginPlay);
+    private final UiButton settings = add("Réglages", Ui.SLATE, null, g::goSettingsFromPause);
+    private final UiButton home = add("Accueil", Ui.SLATE, null, g::goStart);
 
     public PauseScreen(GameView g) {
         super(g);
@@ -33,6 +34,8 @@ public final class PauseScreen extends Screen {
                 lx, h * 0.55f, fs, Color.WHITE, false, Paint.Align.CENTER, W * 0.45f);
         Ui.text(c, "Étoiles : " + g.playScreen.starCount() + "/3",
                 lx, h * 0.62f, fs, Color.WHITE, false, Paint.Align.CENTER, W * 0.45f);
+        Ui.text(c, "Un compte à rebours précède la reprise.", lx, h * 0.82f,
+                Math.max(Ui.sp(14), h * 0.04f), Ui.alpha(Color.WHITE, 220), false, Paint.Align.CENTER, W * 0.45f);
 
         float x0 = L + W * 0.56f, x1 = L + W * 0.93f;
         resume.set(x0, h * 0.07f, x1, h * 0.29f);
@@ -43,30 +46,5 @@ public final class PauseScreen extends Screen {
         restart.draw(c);
         settings.draw(c);
         home.draw(c);
-
-        Ui.text(c, "Un compte à rebours précède la reprise.", lx, h * 0.82f,
-                Math.max(Ui.sp(14), h * 0.04f), Ui.alpha(Color.WHITE, 220), false, Paint.Align.CENTER, W * 0.45f);
     }
-
-    @Override
-    public void onDown(float x, float y) {
-        resume.onDown(x, y); restart.onDown(x, y); settings.onDown(x, y); home.onDown(x, y);
-    }
-
-    @Override
-    public void onMove(float x, float y) {
-        resume.onMove(x, y); restart.onMove(x, y); settings.onMove(x, y); home.onMove(x, y);
-    }
-
-    @Override
-    public void onUp(float x, float y) {
-        boolean r = resume.onUp(x, y), re = restart.onUp(x, y), s = settings.onUp(x, y), ho = home.onUp(x, y);
-        if (r) g.resumeGame();
-        else if (re) g.beginPlay();
-        else if (s) g.goSettingsFromPause();
-        else if (ho) g.goStart();
-    }
-
-    @Override
-    public void onCancel() { resume.onCancel(); restart.onCancel(); settings.onCancel(); home.onCancel(); }
 }
