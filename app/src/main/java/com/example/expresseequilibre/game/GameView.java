@@ -6,6 +6,7 @@ import com.example.expresseequilibre.input.SensorController;
 import com.example.expresseequilibre.screens.EndScreen;
 import com.example.expresseequilibre.screens.LevelScreen;
 import com.example.expresseequilibre.screens.PauseScreen;
+import com.example.expresseequilibre.screens.PlayScreen;
 import com.example.expresseequilibre.screens.Screen;
 import com.example.expresseequilibre.screens.SettingsScreen;
 import com.example.expresseequilibre.screens.StartScreen;
@@ -16,6 +17,9 @@ import android.content.SharedPreferences;
 import android.graphics.Canvas;
 import android.view.MotionEvent;
 import android.view.View;
+
+import java.util.EnumMap;
+import java.util.Map;
 
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -37,12 +41,7 @@ public class GameView extends View {
 
     private final Host host;
     private final SharedPreferences prefs;
-    private final StartScreen startScreen;
-    private final LevelScreen levelScreen;
-    private final TutorialScreen tutorialScreen;
-    private final SettingsScreen settingsScreen;
-    private final PauseScreen pauseScreen;
-    private final EndScreen endScreen;
+    private final Map<GameState, Screen> screens = new EnumMap<>(GameState.class);
 
     private GameState state = GameState.START;
     private Screen current;
@@ -53,10 +52,9 @@ public class GameView extends View {
     public int curLevel;
     public int pendingLevel = -1;
 
-    // Résultat de la dernière partie
-    public boolean lastWin, lastRecord;
-    public int lastStars, lastScore, lastSeconds, bestScore;
-    public float lastRunTime;
+    // Résultat de la dernière partie et meilleur score
+    public RunResult lastRun;
+    public int bestScore;
 
     private boolean settingsFromPause;
     private float transition;
@@ -83,18 +81,21 @@ public class GameView extends View {
         prefs = context.getSharedPreferences("equilibre_express", Context.MODE_PRIVATE);
         progress = new Progress(prefs);
         sensors = new SensorController(context);
-        sensors.setFlatReference(progress.calibFlat);
-        sensors.setMicSensitivity(progress.micSens);
+        sensors.tilt.setFlatReference(progress.calibFlat);
+        sensors.blow.setSensitivity(progress.micSens);
         feedback = new Feedback(context, prefs);
         bestScore = prefs.getInt("best", 0);
 
-        startScreen = new StartScreen(this);
-        levelScreen = new LevelScreen(this);
-        tutorialScreen = new TutorialScreen(this);
-        settingsScreen = new SettingsScreen(this);
         playScreen = new PlayScreen(this);
-        pauseScreen = new PauseScreen(this);
-        endScreen = new EndScreen(this);
+        EndScreen endScreen = new EndScreen(this);
+        screens.put(GameState.START, new StartScreen(this));
+        screens.put(GameState.LEVELS, new LevelScreen(this));
+        screens.put(GameState.TUTORIAL, new TutorialScreen(this));
+        screens.put(GameState.SETTINGS, new SettingsScreen(this));
+        screens.put(GameState.PLAYING, playScreen);
+        screens.put(GameState.PAUSED, new PauseScreen(this));
+        screens.put(GameState.WIN, endScreen);
+        screens.put(GameState.LOSE, endScreen);
 
         setFocusable(true);
         ViewCompat.setOnApplyWindowInsetsListener(this, (v, insets) -> {
@@ -117,7 +118,7 @@ public class GameView extends View {
         running = true;
         lastNanos = 0;
         sensors.start();
-        sensors.setMicActive(micWanted());
+        sensors.blow.setActive(micWanted());
         postOnAnimation(gameLoop);
     }
 
@@ -166,21 +167,13 @@ public class GameView extends View {
 
     /** Demande la permission micro si besoin, puis (ré)active l'écoute si l'écran en a besoin. */
     public void requestMic() {
-        host.requestMicPermission(() -> sensors.setMicActive(micWanted()));
+        host.requestMicPermission(() -> sensors.blow.setActive(micWanted()));
     }
 
     public void setState(GameState s) {
         state = s;
-        switch (s) {
-            case START: current = startScreen; break;
-            case LEVELS: current = levelScreen; break;
-            case TUTORIAL: current = tutorialScreen; break;
-            case SETTINGS: current = settingsScreen; break;
-            case PLAYING: current = playScreen; break;
-            case PAUSED: current = pauseScreen; break;
-            default: current = endScreen; break;
-        }
-        sensors.setMicActive(micWanted());
+        current = screens.get(s);
+        sensors.blow.setActive(micWanted());
         transition = (s == GameState.PAUSED) ? 0f : 1f;
         current.onEnter();
     }
@@ -251,16 +244,12 @@ public class GameView extends View {
     }
 
     public void finishGame(boolean win, int stars, int score, int secondsLeft, float runTime) {
-        lastWin = win;
-        lastStars = stars;
-        lastScore = score;
-        lastSeconds = secondsLeft;
-        lastRunTime = runTime;
-        lastRecord = score > bestScore;
-        if (lastRecord) {
+        boolean record = score > bestScore;
+        if (record) {
             bestScore = score;
             prefs.edit().putInt("best", score).apply();
         }
+        lastRun = new RunResult(win, record, stars, score, secondsLeft, runTime);
         if (win) progress.record(curLevel, stars);
         setState(win ? GameState.WIN : GameState.LOSE);
     }
