@@ -197,11 +197,6 @@ public final class Icons {
 
     // ---------- Divers ----------
 
-    public static void flag(Canvas c, float cx, float cy, float s, int color) {
-        line(c, color, s * 0.09f, cx - s * 0.25f, cy + s * 0.42f, cx - s * 0.25f, cy - s * 0.42f);
-        polygon(c, color, cx - s * 0.25f, cy - s * 0.40f, cx + s * 0.38f, cy - s * 0.2f, cx - s * 0.25f, cy);
-    }
-
     public static void lock(Canvas c, float cx, float cy, float s, int color) {
         Ui.roundRect(c, cx - s * 0.28f, cy - s * 0.02f, cx + s * 0.28f, cy + s * 0.40f, s * 0.06f, color);
         Ui.R.set(cx - s * 0.18f, cy - s * 0.40f, cx + s * 0.18f, cy + s * 0.12f);

@@ -1,6 +1,5 @@
 package com.example.expresseequilibre.data;
 
-import com.example.expresseequilibre.game.Levels;
 import com.example.expresseequilibre.input.ControlMode;
 import android.content.SharedPreferences;
 
@@ -21,19 +20,6 @@ public final class Progress {
         calibFlat = p.getBoolean("calibFlat", true);
         padLeft = p.getBoolean("padLeft", false);
         micSens = Math.max(0f, Math.min(1f, p.getFloat("micSens", 0.5f)));
-        purgeOldGhosts();
-    }
-
-    /** Les fantômes n'existent plus : on libère les anciennes données enregistrées. */
-    private void purgeOldGhosts() {
-        SharedPreferences.Editor ed = null;
-        for (String k : p.getAll().keySet()) {
-            if (k.startsWith("ghost")) {
-                if (ed == null) ed = p.edit();
-                ed.remove(k);
-            }
-        }
-        if (ed != null) ed.apply();
     }
 
     // ---------- Réglages ----------
@@ -75,15 +61,4 @@ public final class Progress {
         p.edit().putBoolean("done_" + lv, true).putInt("stars_" + lv, Math.max(stars(lv), stars)).apply();
     }
 
-    public int totalStars() {
-        int t = 0;
-        for (int i = 0; i < Levels.ALL.length; i++) t += stars(i);
-        return t;
-    }
-
-    public int doneCount() {
-        int t = 0;
-        for (int i = 0; i < Levels.ALL.length; i++) if (done(i)) t++;
-        return t;
-    }
 }
